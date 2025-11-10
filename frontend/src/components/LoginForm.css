@@ -1,0 +1,232 @@
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255, 247, 235, 0.95), rgba(220, 202, 170, 0.95));
+  backdrop-filter: blur(10px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-content {
+  background: white;
+  border-radius: 30px;
+  padding: 0;
+  max-width: 550px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 30px 80px rgba(39, 60, 46, 0.25);
+  animation: modalSlideIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  border: 1px solid #ede6d9;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-100px) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-header {
+  background: linear-gradient(135deg, #bca67a, #a48c65);
+  background-size: 200% 200%;
+  animation: loginHeaderGradient 8s ease infinite;
+  color: #fff7eb;
+  padding: 2.5rem 2rem;
+  border-radius: 30px 30px 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+
+@keyframes loginHeaderGradient {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.modal-header::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -50%;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, transparent 70%);
+  animation: rotate 15s linear infinite;
+}
+
+@keyframes rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 900;
+  text-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+  letter-spacing: 1px;
+  position: relative;
+  z-index: 1;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: #fff7eb;
+  font-size: 1.8rem;
+  cursor: pointer;
+  padding: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  position: relative;
+  z-index: 1;
+}
+
+.close-btn:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+  transform: rotate(90deg) scale(1.1);
+}
+
+.login-form {
+  padding: 3rem 2.5rem;
+  background: linear-gradient(145deg, #ffffff, #fff7eb);
+}
+
+.form-group {
+  margin-bottom: 2rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.8rem;
+  color: #4f6354;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 1rem 1.2rem;
+  border: 2px solid #ede6d9;
+  border-radius: 12px;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  background: #fff8ea;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #b69e6a;
+  background: white;
+  box-shadow: 0 5px 20px rgba(182, 158, 106, 0.2);
+  transform: translateY(-2px);
+}
+
+.form-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.submit-btn, .cancel-btn {
+  flex: 1;
+  padding: 0.8rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.submit-btn {
+  background: linear-gradient(135deg, #bca67a, #a48c65);
+  background-size: 200% 200%;
+  animation: loginSubmitGradient 6s ease infinite;
+  color: #fff7eb;
+  box-shadow: 0 5px 20px rgba(182, 158, 106, 0.45);
+  position: relative;
+  overflow: hidden;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+@keyframes loginSubmitGradient {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.submit-btn::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+}
+
+.submit-btn:hover::before {
+  width: 400px;
+  height: 400px;
+}
+
+.submit-btn:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 8px 30px rgba(182, 158, 106, 0.55);
+}
+
+.cancel-btn {
+  background-color: #fff7eb;
+  color: #273c2e;
+  border: 2px solid #ede6d9;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.cancel-btn:hover {
+  background-color: #fff1de;
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(39, 60, 46, 0.15);
+}
+
+@media (max-width: 768px) {
+  .modal-content {
+    width: 95%;
+    margin: 1rem;
+  }
+  
+  .login-form {
+    padding: 1.5rem;
+  }
+  
+  .form-actions {
+    flex-direction: column;
+  }
+}

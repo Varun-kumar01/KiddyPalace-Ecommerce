@@ -1,0 +1,609 @@
+/* 🌟 DIWALI SALE BAR */
+.top-announcement-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: #2371B1;
+  color: #fff7eb;
+  padding: 8px 16px;
+  position: relative;
+  z-index: 1001;
+  box-shadow: 0 2px 6px rgba(39, 60, 46, 0.15);
+}
+.top-announcement-text {
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 2px rgba(39, 60, 46, 0.25);
+}
+
+.top-contact {
+  font-weight: 600;
+}
+
+.top-right-section {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.social-icons a {
+  color: #ffff;
+  font-size: 14px;
+  margin: 0 6px;
+  transition: color 0.2s ease;
+}
+
+.social-icons a:hover {
+  color: #e63946;
+}
+
+
+
+@keyframes glowText {
+  0% {
+    text-shadow: 0 0 5px rgba(255, 247, 235, 0.5),
+                 0 0 10px rgba(182, 158, 106, 0.3),
+                 0 0 15px rgba(182, 158, 106, 0.2);
+  }
+  50% {
+    text-shadow: 0 0 10px rgba(255, 247, 235, 0.8),
+                 0 0 20px rgba(182, 158, 106, 0.6),
+                 0 0 30px rgba(182, 158, 106, 0.4);
+  }
+  100% {
+    text-shadow: 0 0 6px rgba(255, 247, 235, 0.6),
+                 0 0 12px rgba(182, 158, 106, 0.4),
+                 0 0 20px rgba(182, 158, 106, 0.3);
+  }
+}
+
+/* 🌟 MAIN NAVBAR */
+.main-navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  /* background: linear-gradient(90deg, #dccaaa 100%, #dccaaa 100%); */
+  background-color: #ffff;
+  color: #273c2e;
+  padding: 1px 40px;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  box-shadow: 0 4px 10px rgba(39, 60, 46, 0.1);
+}
+
+/* 🌟 Logo */
+.logo-img {
+  height: 60px;
+  width: auto;
+  cursor: pointer;
+  transition: transform 0.3s ease;
+}
+
+.logo-img:hover {
+  transform: scale(1.05);
+}
+
+/* 🌟 Center Navigation List */
+.nav-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.nav-list {
+  display: flex;
+  align-items: center;
+  gap: 25px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nav-item {
+  position: relative;
+  font-size: 14px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.nav-item a,
+.nav-item button {
+  color: #070707;
+  background: none;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: b;
+}
+
+.nav-item:hover a,
+.nav-item:hover button {
+  color: #b69e6a;
+  transform: translateY(-1px);
+}
+
+/* 🌟 Dropdown Base Styles */
+.simple-dropdown,
+.categories-panel {
+  position: absolute;
+  top: 35px;
+  left: 0;
+  background-color: #fff7eb;
+  color: #273c2e;
+  border-radius: 8px;
+  box-shadow: 0 6px 15px rgba(39, 60, 46, 0.2);
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+  transition: all 0.25s ease-in-out;
+  z-index: 999;
+}
+
+/* Hover-Bridge Fix (prevents flicker) */
+.nav-item::after {
+  content: "";
+  position: absolute;
+  bottom: -10px;
+  left: 0;
+  width: 100%;
+  height: 10px;
+  background: transparent;
+}
+
+.nav-item:hover > .simple-dropdown,
+.nav-item:hover > .categories-panel {
+  pointer-events: auto;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 🌟 Simple Dropdown (Age, Brand, Price) */
+.simple-dropdown {
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+  padding: 8px 0;
+}
+
+.simple-dropdown li {
+  padding: 8px 16px;
+  font-size: 14px;
+  transition: background-color 0.2s ease;
+}
+
+.simple-dropdown li:hover {
+  background-color: #ede6d9;
+  color: #b69e6a;
+}
+
+/* 🌟 Categories Panel (Mega Dropdown) */
+.categories-panel {
+  display: flex;
+  padding: 20px;
+  min-width: 550px;
+  gap: 20px;
+  background-color: #fff8ea;
+}
+
+/* Left: Categories */
+.panel-left {
+  width: 40%;
+  border-right: 1px solid #ede6d9;
+}
+
+.panel-categories {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.panel-category {
+  padding: 8px 12px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.panel-category:hover,
+.panel-category.active {
+  background-color: #ede6d9;
+  color: #b69e6a;
+}
+
+/* Right: Subcategories */
+.panel-right {
+  width: 60%;
+}
+
+.subheading {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 10px;
+  color: #b69e6a;
+}
+
+.panel-subcategories {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.panel-subcategories li {
+  padding: 6px 10px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.panel-subcategories li:hover {
+  background-color: #ede6d9;
+  color: #b69e6a;
+  transform: translateX(4px);
+}
+
+.empty {
+  color: #888;
+  font-size: 13px;
+}
+
+/* 🌟 Right Icons (Search, Profile, Cart) */
+.navbar-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.icon {
+  cursor: pointer;
+  color: #273c2e;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.icon:hover {
+  color: #b69e6a;
+  transform: scale(1.1);
+}
+
+/* Cart Badge */
+.cart-badge {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  background-color: #b69e6a;
+  color: #fff7eb;
+  font-size: 11px;
+  font-weight: bold;
+  border-radius: 50%;
+  padding: 2px 5px;
+  cursor: pointer;
+}
+
+/* 🌟 Mini Search Bar */
+.mini-search {
+  position: absolute;
+  top: 70px;
+  right: 90px;
+  background-color: #fff7eb;
+  border-radius: 20px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  animation: fadeIn 0.2s ease-in-out;
+  z-index: 1000;
+  box-shadow: 0px 4px 10px rgba(39, 60, 46, 0.15);
+}
+
+.mini-search input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #273c2e;
+  padding: 4px 8px;
+  width: 160px;
+}
+
+
+
+/* 🌟 Fade animation for search */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stores-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  background-color: #fff7eb;
+  color: #273c2e;
+  border-radius: 8px;
+  box-shadow: 0 6px 15px rgba(39, 60, 46, 0.2);
+  min-width: 270px;
+  padding: 8px 0;
+  z-index: 1002;
+  animation: slideDown 0.2s ease-in-out;
+  border: 1px solid #ede6d9;
+}
+
+.stores-dropdown a,
+.stores-dropdown button,
+.stores-dropdown li {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  color: #273c2e;
+  background: transparent;
+  border: none;
+  text-align: left;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.stores-dropdown a:hover,
+.stores-dropdown button:hover,
+.stores-dropdown li:hover {
+  background-color: #ede6d9;
+  color: #b69e6a;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================
+   👤 USER PROFILE DROPDOWN
+============================ */
+.auth-container {
+  position: relative;
+  display: inline-block;
+}
+
+.auth-container .icon {
+  cursor: pointer;
+  color: #273c2e;
+  transition: all 0.3s ease;
+}
+
+.auth-container .icon:hover {
+  /* color: #b69e6a; */
+  transform: scale(1.1);
+}
+
+.auth-dropdown {
+  position: absolute;
+  top: 38px;
+  right: 0;
+  background-color: #ffffff;
+  color: #333;
+  border-radius: 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  padding: 12px;
+  width: 160px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 0.25s ease-in-out;
+  z-index: 999;
+}
+
+.auth-dropdown.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+/* Greeting text */
+.user-greeting {
+  display: block;
+  font-size: 14px;
+  color: #222;
+  font-weight: 600;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+/* Buttons inside dropdown */
+.auth-dropdown button {
+  display: block;
+  width: 100%;
+  padding: 8px 0;
+  margin-bottom: 6px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+/* Login Button */
+.login-btn {
+  background-color: #007bff;
+  color: white;
+}
+
+.login-btn:hover {
+  background-color: #0056b3;
+}
+
+/* Signup Button */
+.signup-btn {
+  background-color: #ff4081;
+  color: white;
+}
+
+.signup-btn:hover {
+  background-color: #1e7e34;
+}
+
+/* Logout Button */
+.logout-btn {
+  background-color: #dc3545;
+  color: white;
+}
+
+.logout-btn:hover {
+  background-color: #a71d2a;
+}
+
+/* ============================
+   🔎 MINI SEARCH BOX
+============================ */
+.mini-search {
+  position: absolute;
+  top: 55px;
+  right: 80px;
+  background-color: #fff7eb;
+  border-radius: 8px;
+  padding: 6px 10px;
+  box-shadow: 0 2px 8px rgba(39, 60, 46, 0.15);
+  z-index: 999;
+}
+
+.mini-search input {
+  border: none;
+  outline: none;
+  width: 180px;
+  font-size: 14px;
+  color: #273c2e;
+}
+
+/* ============================
+   🛒 CART BADGE
+============================ */
+.cart-badge {
+  position: absolute;
+  top: -5px;
+  right: -10px;
+  background-color: #b69e6a;
+  color: #fff7eb;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .stores-dropdown {
+    right: -20px;
+  }
+  .stores-dropdown-item {
+    font-size: 12px;
+  }
+}
+
+/* ============================
+   🏬 STORES DROPDOWN (Top Bar)
+============================ */
+.stores-dropdown-wrapper {
+  position: relative;
+}
+
+.stores-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: default;
+}
+
+.stores-dropdown-item:hover {
+  background-color: #ede6d9;
+  color: #b69e6a;
+}
+
+/* Optional: keep trigger inline with text on the bar */
+.top-announcement-container .stores-dropdown-wrapper {
+  margin-left: 8px;
+}
+
+.stores-dropdown-trigger {
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: #fff7eb;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.stores-dropdown-trigger:hover {
+  background-color: rgba(255, 247, 235, 0.12);
+  border-color: rgba(255, 247, 235, 0.85);
+}
+
+.stores-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  background-color: #fff7eb;
+  color: #273c2e;
+  border-radius: 8px;
+  box-shadow: 0 6px 15px rgba(39, 60, 46, 0.2);
+  min-width: 270px;
+  padding: 8px 0;
+  z-index: 1002;
+  animation: slideDown 0.2s ease-in-out;
+  border: 1px solid #ede6d9;
+}
+
+
+
+
+
+
+
+/* --- Sticky Header --- */
+.header {
+  position: sticky;        /* Stays fixed within scroll container */
+  top: 0;                  /* Stick to top of page */
+  z-index: 1000;           /* Make sure it stays above all other elements */
+  background-color: #fff7eb;  /* Same as your site background for seamless look */
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1); /* subtle shadow on scroll */
+}
+
+/* Small dropdown arrow styles */
+.dropdown-arrow {
+  margin-left: 5px;
+  vertical-align: middle;
+  transition: transform 0.25s ease;
+  display: inline-block;
+  position: relative;
+  top: -1px;
+}
+
+.dropdown-arrow.rotate {
+  transform: rotate(180deg);
+}
+
+/* Small right arrows for subcategories */
+.sub-arrow {
+  margin-left: 6px;
+  vertical-align: middle;
+  opacity: 0.7;
+  transition: transform 0.2s ease;
+  position: relative;
+  top: -1px;
+}
+
+.panel-category:hover .sub-arrow,
+.panel-subcategories li:hover .sub-arrow {
+  transform: translateX(3px);
+  opacity: 1;
+}
