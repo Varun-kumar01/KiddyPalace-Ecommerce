@@ -280,3 +280,80 @@
   color: #777;
   font-size: 1.1rem;
 }
+
+
+/* --- Fix product name overflow and keep price fixed --- */
+
+.product-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 360px; /* keep all product cards equal height */
+}
+
+/* Product info area */
+.product-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+/* Product name - truncates with dots */
+.product-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #333;
+  margin: 5px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  padding: 0 5px;
+}
+
+/* Price section stays at fixed size and position */
+.product-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+}
+
+.product-price {
+  font-weight: 700;
+  color: #000000;
+  font-size: 1rem;
+  flex-shrink: 0;  /* prevents resizing */
+  text-align: left;
+}
+
+/* Make sure product card content spacing stays even */
+.product-description {
+  flex-grow: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2; /* limits to 2 lines */
+  -webkit-box-orient: vertical;
+}
+
+.sort-by {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.sort-by label {
+  font-weight: 500;
+  color: #333;
+}
+
+.sort-by select {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  background-color: #fff;
+  font-size: 14px;
+}
