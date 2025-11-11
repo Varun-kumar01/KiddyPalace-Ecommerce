@@ -17,6 +17,10 @@ const Header = () => {
   const [showStoresDropdown, setShowStoresDropdown] = useState(false);
   const [showAuthDropdown, setShowAuthDropdown] = useState(false);
 
+  const [searchQuery, setSearchQuery] = useState('');
+  // const typingTimeout = useRef(null);
+
+
   useEffect(() => {
     const handleClickOutside = (e) => {
     // Close search if clicked outside
@@ -297,19 +301,34 @@ const Header = () => {
           </div>
 
           {searchOpen && (
-            <div className="mini-search">
-              <input
-                type="text"
-                placeholder="Search..."
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && e.target.value.trim()) {
-                    navigate(`/products?search=${encodeURIComponent(e.target.value.trim())}`);
-                    setSearchOpen(false);
-                  }
-                }}
-              />
-            </div>
-          )}
+  <div className="mini-search">
+    <input
+      type="text"
+      placeholder="Search..."
+      value={searchQuery}
+      onChange={(e) => {
+        const value = e.target.value;
+        setSearchQuery(value);
+
+        // 🔹 Automatically navigate and update products while typing
+        if (value.trim().length >= 2) {
+          navigate(`/products?search=${encodeURIComponent(value.trim())}`);
+        } else if (value.trim().length === 0) {
+          // Clear search: show all products again
+          navigate(`/products`);
+        }
+      }}
+      onKeyDown={(e) => {
+        // Still support Enter key if user presses it
+        if (e.key === 'Enter' && e.target.value.trim()) {
+          navigate(`/products?search=${encodeURIComponent(e.target.value.trim())}`);
+          setSearchOpen(false);
+        }
+      }}
+    />
+  </div>
+)}
+
 
           {/* 👤 Profile Section */}
           <div className="auth-container">
