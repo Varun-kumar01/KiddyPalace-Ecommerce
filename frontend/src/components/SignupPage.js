@@ -28,6 +28,7 @@ const SignupPage = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [toast, setToast] = useState({ show: false, message: '' });
 
   const selectedCountry =
     COUNTRY_OPTIONS.find((option) => option.value === formData.countryCode) || COUNTRY_OPTIONS[0];
@@ -56,9 +57,9 @@ const SignupPage = () => {
       return;
     }
 
-    const passwordPolicy = /^(?=.*[A-Z])(?=.*\d)[A-Za-z\d!@#$%^&*()_+\-={}:";'<>?,.]{8,}$/;
-    if (!passwordPolicy.test(formData.password)) {
-      setError('Password must be at least 8 characters long, include one uppercase letter, and one number.');
+    // Simple password rule: minimum 6 characters (no fixed size)
+    if (!formData.password || formData.password.length < 6) {
+      setError('Password must be at least 6 characters.');
       return;
     }
 
@@ -86,9 +87,13 @@ const SignupPage = () => {
         // Store token in localStorage
         localStorage.setItem('token', data.token);
         //localStorage.setItem('user', JSON.stringify(data.user));
-        
-        alert('Signup successful!');
-        navigate('/login');
+
+        // Show centered popup and then redirect to login
+        setToast({ show: true, message: 'Signup successful!' });
+        setTimeout(() => {
+          setToast({ show: false, message: '' });
+          navigate('/login');
+        }, 1200);
       } else {
         setError(data.message || 'Signup failed. Please try again.');
       }
@@ -246,6 +251,62 @@ const SignupPage = () => {
         </div>
       </main>
       <Footer />
+
+      {/* Centered Popup Toast */}
+      {toast.show && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000,
+            backdropFilter: 'blur(2px)'
+          }}
+        >
+          <div
+            style={{
+              background: '#fff7eb',
+              color: '#273c2e',
+              border: '1px solid rgba(182, 158, 106, 0.35)',
+              borderRadius: 18,
+              boxShadow: '0 18px 40px rgba(39, 60, 46, 0.18)',
+              padding: '24px 28px',
+              width: 'min(92vw, 440px)',
+              textAlign: 'center',
+              transform: 'scale(1)',
+              animation: 'kpScaleIn 240ms ease-out',
+              fontWeight: 700,
+              position: 'relative'
+            }}
+          >
+            <div
+              style={{
+                width: 54,
+                height: 54,
+                margin: '0 auto 12px',
+                borderRadius: '50%',
+                display: 'grid',
+                placeItems: 'center',
+                background: 'linear-gradient(135deg, #6fbf8c, #4f8f70)',
+                color: '#fff7eb',
+                boxShadow: '0 8px 20px rgba(111,191,140,0.35)',
+                border: '2px solid rgba(255,255,255,0.55)'
+              }}
+            >
+              ✓
+            </div>
+            <div style={{ fontSize: 18, letterSpacing: 0.2, marginBottom: 4 }}>
+              {toast.message}
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 500, color: '#4f6354' }}>
+              Redirecting to login...
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

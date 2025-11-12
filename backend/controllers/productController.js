@@ -144,7 +144,7 @@ exports.addProduct = async (req, res) => {
 exports.updateProductImage = async (req, res) => {
   try {
     const { id } = req.params;
-
+    
     if (!req.file) {
       return res.status(400).json({ message: 'No image file provided' });
     }
@@ -346,6 +346,20 @@ exports.deleteProduct = async (req, res) => {
       return res.status(404).json({ message: 'Product not found' });
     }
 
+    // Check for existing order references
+    const [rows] = await db.query(
+      'SELECT COUNT(*) AS referenceCount FROM order_items WHERE product_id = ?',[id]
+    );
+    const referenceCount = rows?.[0]?.referenceCount || 0;
+
+    if (referenceCount > 0) {
+      return res.status(409).json({
+        success: false,
+        message: 'Cannot delete product because it is referenced by existing orders',
+        references: referenceCount
+      });
+    }
+
     // Delete product
     await db.query('DELETE FROM products WHERE id = ?', [id]);
 
@@ -356,32 +370,460 @@ exports.deleteProduct = async (req, res) => {
 
   } catch (error) {
     console.error('Delete product error:', error);
+    // Handle FK constraint error gracefully if it slips through
+    if (error?.code === 'ER_ROW_IS_REFERENCED_2') {
+      return res.status(409).json({
+        success: false,
+        message: 'Cannot delete product because it is referenced by existing orders'
+      });
+    }
     res.status(500).json({ message: 'Server error while deleting product' });
   }
 };
 
-// Get user orders
+// Get user orders with items
 exports.getUserOrders = async (req, res) => {
   try {
     const { userId } = req.params;
 
-    const [orders] = await db.query(
-      `SELECT o.*, p.name as product_name, p.image_url, p.price 
-       FROM orders o 
-       JOIN products p ON o.product_id = p.id 
-       WHERE o.user_id = ? 
-       ORDER BY o.order_date DESC`,
-      [userId]
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'User ID is required' });
+    }
+
+    // Try orders_new first, fallback to orders if table was renamed
+    let orders = [];
+    
+    try {
+      const [ordersResult] = await db.query(
+        `SELECT * FROM orders_new WHERE user_id = ? ORDER BY created_at DESC`,
+        [userId]
+      );
+      orders = ordersResult;
+    } catch (tableError) {
+      // If orders_new doesn't exist, try orders table
+      if (tableError.code === 'ER_NO_SUCH_TABLE' || tableError.message.includes("doesn't exist")) {
+        console.log('orders_new table not found, trying orders table...');
+        const [ordersResult] = await db.query(
+          `SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC`,
+          [userId]
+        );
+        orders = ordersResult;
+      } else {
+        throw tableError;
+      }
+    }
+
+    if (!orders.length) {
+      return res.status(200).json({ success: true, orders: [] });
+    }
+
+    const orderIds = orders.map(order => order.id);
+
+    if (orderIds.length === 0) {
+      return res.status(200).json({ success: true, orders: [] });
+    }
+
+    const [items] = await db.query(
+      `SELECT * FROM order_items WHERE order_id IN (?) ORDER BY created_at ASC`,
+      [orderIds]
     );
+
+    const itemsByOrder = items.reduce((acc, item) => {
+      if (!acc[item.order_id]) acc[item.order_id] = [];
+      acc[item.order_id].push(item);
+      return acc;
+    }, {});
+
+    const formattedOrders = orders.map(order => {
+      let paymentDetails = order.payment_details;
+      if (paymentDetails) {
+        try {
+          paymentDetails = typeof paymentDetails === 'string' ? JSON.parse(paymentDetails) : paymentDetails;
+        } catch (err) {
+          paymentDetails = null;
+        }
+      }
+
+      const canModify = ['pending', 'processing'].includes(order.order_status);
+
+      return {
+        ...order,
+        payment_details: paymentDetails,
+        items: itemsByOrder[order.id] || [],
+        isCancelable: canModify,
+        canUpdateAddress: canModify,
+      };
+    });
 
     res.status(200).json({
       success: true,
-      orders: orders
+      orders: formattedOrders,
     });
 
   } catch (error) {
-    console.error('Get orders error:', error);
-    res.status(500).json({ message: 'Server error while fetching orders' });
+    console.error('Get user orders error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error while fetching orders',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// Get single order details
+exports.getOrderDetails = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    const [orders] = await db.query(
+      `SELECT * FROM orders_new WHERE id = ?`,
+      [orderId]
+    );
+
+    if (!orders.length) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    const order = orders[0];
+
+    const [items] = await db.query(
+      `SELECT * FROM order_items WHERE order_id = ? ORDER BY created_at ASC`,
+      [orderId]
+    );
+
+    let paymentDetails = order.payment_details;
+    if (paymentDetails) {
+      try {
+        paymentDetails = typeof paymentDetails === 'string' ? JSON.parse(paymentDetails) : paymentDetails;
+      } catch (err) {
+        paymentDetails = null;
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      order: {
+        ...order,
+        payment_details: paymentDetails,
+        items,
+        isCancelable: ['pending', 'processing'].includes(order.order_status),
+        canUpdateAddress: ['pending', 'processing'].includes(order.order_status),
+      },
+    });
+
+  } catch (error) {
+    console.error('Get order details error:', error);
+    res.status(500).json({ message: 'Server error while fetching order details' });
+  }
+};
+
+// Admin: Get all orders with items (optionally filter by status)
+exports.getAllOrders = async (req, res) => {
+  try {
+    const { status } = req.query;
+
+    // Try orders_new first, fallback to orders if table was renamed
+    let orders = [];
+    let tableName = 'orders_new';
+    
+    try {
+      const whereClause = status ? 'WHERE order_status = ?' : '';
+      const params = status ? [status] : [];
+
+      const [ordersResult] = await db.query(
+        `SELECT * FROM orders_new ${whereClause} ORDER BY created_at DESC`,
+        params
+      );
+      orders = ordersResult;
+    } catch (tableError) {
+      // If orders_new doesn't exist, try orders table
+      if (tableError.code === 'ER_NO_SUCH_TABLE' || tableError.message.includes("doesn't exist")) {
+        console.log('orders_new table not found, trying orders table...');
+        tableName = 'orders';
+        const whereClause = status ? 'WHERE order_status = ?' : '';
+        const params = status ? [status] : [];
+
+        const [ordersResult] = await db.query(
+          `SELECT * FROM orders ${whereClause} ORDER BY created_at DESC`,
+          params
+        );
+        orders = ordersResult;
+      } else {
+        throw tableError;
+      }
+    }
+
+    if (!orders.length) {
+      return res.status(200).json({ success: true, orders: [] });
+    }
+
+    const orderIds = orders.map(o => o.id);
+
+    if (orderIds.length === 0) {
+      return res.status(200).json({ success: true, orders: [] });
+    }
+
+    const [items] = await db.query(
+      `SELECT * FROM order_items WHERE order_id IN (?) ORDER BY created_at ASC`,
+      [orderIds]
+    );
+
+    const itemsByOrder = items.reduce((acc, item) => {
+      if (!acc[item.order_id]) acc[item.order_id] = [];
+      acc[item.order_id].push(item);
+      return acc;
+    }, {});
+
+    const formatted = orders.map(order => {
+      let paymentDetails = order.payment_details;
+      if (paymentDetails) {
+        try {
+          paymentDetails = typeof paymentDetails === 'string' ? JSON.parse(paymentDetails) : paymentDetails;
+        } catch (_) {
+          paymentDetails = null;
+        }
+      }
+      return {
+        ...order,
+        payment_details: paymentDetails,
+        items: itemsByOrder[order.id] || []
+      };
+    });
+
+    res.status(200).json({ success: true, orders: formatted });
+  } catch (error) {
+    console.error('Get all orders error:', error);
+    // Ensure we always return JSON, even on error
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error while fetching all orders',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// Accept an order (mark as 'accepted') - changes status from pending to accepted
+exports.acceptOrder = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    // Try orders_new first, fallback to orders if table was renamed
+    let orders = [];
+    let tableName = 'orders_new';
+    
+    try {
+      const [ordersResult] = await db.query(
+        `SELECT id, order_status FROM orders_new WHERE id = ?`,
+        [orderId]
+      );
+      orders = ordersResult;
+    } catch (tableError) {
+      // If orders_new doesn't exist, try orders table
+      if (tableError.code === 'ER_NO_SUCH_TABLE' || tableError.message.includes("doesn't exist")) {
+        console.log('orders_new table not found, trying orders table...');
+        tableName = 'orders';
+        const [ordersResult] = await db.query(
+          `SELECT id, order_status FROM orders WHERE id = ?`,
+          [orderId]
+        );
+        orders = ordersResult;
+      } else {
+        throw tableError;
+      }
+    }
+
+    if (!orders.length) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    const order = orders[0];
+    
+    // Only allow accepting orders that are pending
+    if (order.order_status !== 'pending') {
+      return res.status(400).json({ 
+        success: false,
+        message: `Cannot accept order. Current status is '${order.order_status}'. Only pending orders can be accepted.` 
+      });
+    }
+
+    // Update order status from pending to accepted
+    await db.query(
+      `UPDATE ${tableName} SET order_status = 'accepted', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [orderId]
+    );
+
+    res.status(200).json({ success: true, message: 'Order accepted successfully. Status changed from pending to accepted.' });
+  } catch (error) {
+    console.error('Accept order error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error while accepting order',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// Cancel order and restock items
+exports.cancelOrder = async (req, res) => {
+  const connection = await db.getConnection();
+
+  try {
+    const { orderId } = req.params;
+    const { userId } = req.body;
+
+    if (!orderId || !userId) {
+      connection.release();
+      return res.status(400).json({ message: 'Order ID and User ID are required' });
+    }
+
+    await connection.beginTransaction();
+
+    const [orders] = await connection.query(
+      `SELECT id, user_id, order_status FROM orders_new WHERE id = ? FOR UPDATE`,
+      [orderId]
+    );
+
+    if (!orders.length) {
+      await connection.rollback();
+      connection.release();
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    const order = orders[0];
+
+    if (order.user_id && Number(order.user_id) !== Number(userId)) {
+      await connection.rollback();
+      connection.release();
+      return res.status(403).json({ message: 'You are not authorized to modify this order' });
+    }
+
+    if (['cancelled', 'delivered'].includes(order.order_status)) {
+      await connection.rollback();
+      connection.release();
+      return res.status(400).json({ message: `Order already ${order.order_status}` });
+    }
+
+    const [items] = await connection.query(
+      `SELECT product_id, quantity FROM order_items WHERE order_id = ?`,
+      [orderId]
+    );
+
+    for (const item of items) {
+      await connection.query(
+        'UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?',
+        [item.quantity, item.product_id]
+      );
+    }
+
+    await connection.query(
+      `UPDATE orders_new SET order_status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [orderId]
+    );
+
+    await connection.commit();
+    connection.release();
+
+    res.status(200).json({ success: true, message: 'Order cancelled successfully' });
+
+  } catch (error) {
+    await connection.rollback();
+    connection.release();
+    console.error('Cancel order error:', error);
+    res.status(500).json({ message: 'Server error while cancelling order' });
+  }
+};
+
+// Update shipping address for an order
+exports.updateOrderAddress = async (req, res) => {
+  const connection = await db.getConnection();
+
+  try {
+    const { orderId } = req.params;
+    const { userId, shippingAddress } = req.body;
+
+    if (!orderId || !userId || !shippingAddress) {
+      connection.release();
+      return res.status(400).json({ message: 'Order ID, User ID and shipping address are required' });
+    }
+
+    const {
+      fullName,
+      email,
+      phone,
+      address,
+      city,
+      state = '',
+      zipCode,
+      country = 'India',
+    } = shippingAddress;
+
+    if (!fullName || !email || !phone || !address || !city || !zipCode) {
+      connection.release();
+      return res.status(400).json({ message: 'Incomplete shipping address details' });
+    }
+
+    await connection.beginTransaction();
+
+    const [orders] = await connection.query(
+      `SELECT user_id, order_status FROM orders_new WHERE id = ? FOR UPDATE`,
+      [orderId]
+    );
+
+    if (!orders.length) {
+      await connection.rollback();
+      connection.release();
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    const order = orders[0];
+
+    if (order.user_id && Number(order.user_id) !== Number(userId)) {
+      await connection.rollback();
+      connection.release();
+      return res.status(403).json({ message: 'You are not authorized to modify this order' });
+    }
+
+    if (!['pending', 'processing'].includes(order.order_status)) {
+      await connection.rollback();
+      connection.release();
+      return res.status(400).json({ message: 'Address cannot be updated after order is shipped' });
+    }
+
+    await connection.query(
+      `UPDATE orders_new SET 
+        shipping_full_name = ?,
+        shipping_email = ?,
+        shipping_phone = ?,
+        shipping_address = ?,
+        shipping_city = ?,
+        shipping_state = ?,
+        shipping_zip_code = ?,
+        shipping_country = ?,
+        updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [
+        fullName,
+        email,
+        phone,
+        address,
+        city,
+        state,
+        zipCode,
+        country,
+        orderId,
+      ]
+    );
+
+    await connection.commit();
+    connection.release();
+
+    res.status(200).json({ success: true, message: 'Shipping address updated successfully' });
+
+  } catch (error) {
+    await connection.rollback();
+    connection.release();
+    console.error('Update order address error:', error);
+    res.status(500).json({ message: 'Server error while updating address' });
   }
 };
 
@@ -512,5 +954,81 @@ exports.uploadProductsFromExcel = async (req, res) => {
       message: "Error uploading Excel",
       error: error.message
     });
+  }
+};
+
+// Get tracking info for a specific order item
+exports.getItemTracking = async (req, res) => {
+  try {
+    const { orderId, itemId } = req.params;
+
+    if (!orderId || !itemId) {
+      return res.status(400).json({ success: false, message: 'Order ID and Item ID are required' });
+    }
+
+    // Load order (for overall status) and item (for item-level details if present)
+    const [[orderRows], [itemRows]] = await Promise.all([
+      db.query(`SELECT id, order_status, created_at, updated_at FROM orders_new WHERE id = ?`, [orderId]),
+      db.query(`SELECT * FROM order_items WHERE id = ? AND order_id = ?`, [itemId, orderId])
+    ]);
+
+    if (!orderRows || orderRows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+    if (!itemRows || itemRows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Order item not found' });
+    }
+
+    const order = orderRows[0];
+    const item = itemRows[0];
+
+    // Some installations may not yet have tracking fields on order_items.
+    // We will derive a simple timeline from order_status and include optional fields if present.
+    const carrier = item.carrier || null;
+    const trackingNumber = item.tracking_number || null;
+    const itemStatus = item.item_status || null; // optional per-item status if schema supports it
+
+    // Build a basic timeline based on known statuses
+    const status = (itemStatus || order.order_status || 'pending').toLowerCase();
+    const steps = [
+      { key: 'placed', label: 'Order Placed' },
+      { key: 'processing', label: 'Processing' },
+      { key: 'accepted', label: 'Accepted' },
+      { key: 'shipped', label: 'Shipped' },
+      { key: 'delivered', label: 'Delivered' }
+    ];
+
+    const isCompleted = (stepKey) => {
+      const orderOf = { placed: 0, pending: 0, processing: 1, accepted: 2, shipped: 3, delivered: 4, cancelled: -1 };
+      const current = orderOf[status] ?? 0;
+      const step = orderOf[stepKey] ?? -1;
+      return step !== -1 && current >= step;
+    };
+
+    const timeline = steps.map(s => ({
+      key: s.key,
+      label: s.label,
+      completed: isCompleted(s.key)
+    }));
+
+    // If cancelled, annotate
+    const cancelled = status === 'cancelled';
+
+    return res.status(200).json({
+      success: true,
+      tracking: {
+        orderId: Number(orderId),
+        itemId: Number(itemId),
+        product_name: item.product_name,
+        status: cancelled ? 'cancelled' : status,
+        carrier,
+        trackingNumber,
+        timeline,
+        updated_at: order.updated_at,
+      }
+    });
+  } catch (error) {
+    console.error('Get item tracking error:', error);
+    return res.status(500).json({ success: false, message: 'Server error while fetching tracking info' });
   }
 };

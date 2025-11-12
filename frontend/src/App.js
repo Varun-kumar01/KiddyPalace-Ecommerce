@@ -14,11 +14,18 @@ import OrderConfirmationPage from './components/OrderConfirmationPage';
 import ContactPage from './components/ContactPage';
 import './App.css';
 import ProductDetails from './components/ProductDetails';
+import GiftCardDetails from './components/GiftCardDetails';
+import OrdersPage from './components/OrdersPage';
 
 function App() {
   return (
     <CartProvider>
-      <Router>
+      <Router
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
         <div className="App">
           <Routes>
             <Route path="/" element={<HomePage />} />
@@ -34,6 +41,8 @@ function App() {
             <Route path="/contact" element={<ContactPage />} />
             <Route path="/products" element={<ProductsPage />} />
             <Route path="/product/:id" element={<ProductDetails />} />
+            <Route path="/orders" element={<OrdersPage />} />
+            <Route path="/giftcards/:id" element={<GiftCardDetails />} />
           </Routes>
         </div>
       </Router>

@@ -4,6 +4,7 @@ const multer = require('multer');
 const productController = require('../controllers/productController');
 const path = require('path');
 const fs = require('fs');
+const { authenticateAdmin } = require('../middleware/adminAuth');
 
 // =====================================================
 // 🖼️ IMAGE UPLOAD CONFIGURATION
@@ -12,7 +13,7 @@ const imageStorage = multer.memoryStorage();
 
 const uploadImage = multer({
   storage: imageStorage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 2MB max image size
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB max image size
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) cb(null, true);
     else cb(new Error('Only image files are allowed!'), false);
@@ -73,8 +74,26 @@ router.delete('/products/:id', productController.deleteProduct);
 // Create new order
 router.post('/orders', productController.createOrder);
 
-// Fetch user’s orders
+// Get all orders (no auth required) - MUST come before /orders/:orderId
+router.get('/orders', productController.getAllOrders);
+
+// Fetch user's orders
 router.get('/orders/user/:userId', productController.getUserOrders);
+
+// Accept order (no auth required) - MUST come before /orders/:orderId
+router.put('/orders/:orderId/accept', productController.acceptOrder);
+
+// Get tracking info for a specific order item (must be before /orders/:orderId)
+router.get('/orders/:orderId/items/:itemId/tracking', productController.getItemTracking);
+
+// Fetch order details
+router.get('/orders/:orderId', productController.getOrderDetails);
+
+// Cancel order
+router.put('/orders/:orderId/cancel', productController.cancelOrder);
+
+// Update order shipping address
+router.put('/orders/:orderId/address', productController.updateOrderAddress);
 
 // Get products by subcategory
 router.get('/products/subcategory/:subcategoryId', productController.getProductsBySubcategory);
