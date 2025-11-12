@@ -23,74 +23,101 @@ const AdminPage = () => {
   const [uploading, setUploading] = useState(false);
   const [categories, setCategories] = useState([]);
   const [subcategories, setSubcategories] = useState([]);
-
+  const [adminOrders, setAdminOrders] = useState([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [ordersError, setOrdersError] = useState("");
+  const [ordersStatusFilter, setOrdersStatusFilter] = useState('all');
+  
 
   // Popup
   const [showPopup, setShowPopup] = useState(false);
   const [popupMessage, setPopupMessage] = useState('');
-
-  
-  // Bulk upload states
-  const [bulkFile, setBulkFile] = useState(null);
-  const [bulkMessage, setBulkMessage] = useState("");
-  const [bulkLoading, setBulkLoading] = useState(false);
-
-  // Handle bulk upload
-  const handleBulkUpload = async (e) => {
-    e.preventDefault();
-    if (!bulkFile) {
-      setBulkMessage("⚠️ Please select an Excel file first.");
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append("file", bulkFile);
-
-    try {
-      setBulkLoading(true);
-      setBulkMessage("Uploading... ⏳");
-
-      const response = await axios.post("http://localhost:5000/api/upload-excel", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-
-      setBulkMessage(`✅ ${response.data.message || "Products uploaded successfully!"}`);
-    } catch (error) {
-      console.error(error);
-      const serverMsg =
-        error.response?.data?.message ||
-        (Array.isArray(error.response?.data?.missing_headers)
-          ? `Missing headers: ${error.response.data.missing_headers.join(', ')}`
-          : null);
-      setBulkMessage(`❌ ${serverMsg || "Error uploading Excel file. Please check your format."}`);
-    } finally {
-      setBulkLoading(false);
-    }
+  const [toast, setToast] = useState({ show: false, message: '', kind: 'success' });
+  const showToast = (message, kind = 'success', duration = 1200) => {
+    setToast({ show: true, message, kind });
+    setTimeout(() => setToast({ show: false, message: '', kind }), duration);
+  };
+  const [confirmState, setConfirmState] = useState({
+    open: false,
+    message: '',
+    onConfirm: null,
+  });
+  const askConfirm = (message, onConfirm) => {
+    setConfirmState({ open: true, message, onConfirm });
+  };
+  const handleConfirmYes = () => {
+    const fn = confirmState.onConfirm;
+    setConfirmState({ open: false, message: '', onConfirm: null });
+    if (typeof fn === 'function') fn();
+  };
+  const handleConfirmNo = () => {
+    setConfirmState({ open: false, message: '', onConfirm: null });
   };
 
-  // ✅ Billing state
+  
+// Bulk upload states
+const [bulkFile, setBulkFile] = useState(null);
+const [bulkMessage, setBulkMessage] = useState("");
+const [bulkLoading, setBulkLoading] = useState(false);
+
+// Handle bulk upload
+const handleBulkUpload = async (e) => {
+  e.preventDefault();
+  if (!bulkFile) {
+    setBulkMessage("⚠️ Please select an Excel file first.");
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", bulkFile);
+
+  try {
+    setBulkLoading(true);
+    setBulkMessage("Uploading... ⏳");
+
+    const response = await axios.post("http://localhost:5000/api/upload-excel", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+
+    setBulkMessage(`✅ ${response.data.message || "Products uploaded successfully!"}`);
+  } catch (error) {
+    console.error(error);
+    const serverMsg =
+      error.response?.data?.message ||
+      (Array.isArray(error.response?.data?.missing_headers)
+        ? `Missing headers: ${error.response.data.missing_headers.join(', ')}`
+        : null);
+    setBulkMessage(`❌ ${serverMsg || "Error uploading Excel file. Please check your format."}`);
+  } finally {
+    setBulkLoading(false);
+  }
+};
+
+ // ✅ Billing state
   const [billItems, setBillItems] = useState([]);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [selectedBillingProduct, setSelectedBillingProduct] = useState("");
   const [billingQuantity, setBillingQuantity] = useState(1);
+  // Quick add to bag quantities per product in Manage tab
+  const [quickAddQty, setQuickAddQty] = useState({});
   
   // New product form state
-  const [newProduct, setNewProduct] = useState({
-    product_name: '',
-    product_price: '',
-    product_brand: '',
-    product_description: '',
-    age_range: '',
-    gender: '',
-    specifications: '',
-    product_details: '',
-    brand_name: '',
-    product_highlights: '',
-    category_id: '',
-    subcategory_id: '',
-    stock_quantity: ''
-  });
+ const [newProduct, setNewProduct] = useState({
+  product_name: '',
+  product_price: '',
+  product_brand: '',
+  product_description: '',
+  age_range: '',
+  gender: '',
+  specifications: '',
+  product_details: '',
+  brand_name: '',
+  product_highlights: '',
+  category_id: '',
+  subcategory_id: '',
+  stock_quantity: ''
+});
 
   const [newProductImages, setNewProductImages] = useState([]);
   
@@ -98,43 +125,47 @@ const AdminPage = () => {
   const [editingProductId, setEditingProductId] = useState(null);
   const [editStockValue, setEditStockValue] = useState('');
 
-
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    const token = localStorage.getItem('token');
+  const storedUser = localStorage.getItem('user');
+  const token = localStorage.getItem('token');
+
+  if (!storedUser || !token) {
+    navigate('/login');
+    return;
+  }
+
+  const parsedUser = JSON.parse(storedUser);
+  if (parsedUser.role !== 'super_admin') {
+    navigate('/');
+    return;
+  }
+
+  setAdminUser(parsedUser);
+  setIsVerifying(false);
+  fetchProducts();
+}, [navigate]);
+
+
+
+
   
-    if (!storedUser || !token) {
-      navigate('/login');
-      return;
-    }
-  
-    const parsedUser = JSON.parse(storedUser);
-    if (parsedUser.role !== 'super_admin') {
-      navigate('/');
-      return;
-    }
-  
-    setAdminUser(parsedUser);
-    setIsVerifying(false);
-    fetchProducts();
-  }, [navigate]);
+//const [categories, setCategories] = useState([]);
+//const [subcategories, setSubcategories] = useState([]);
+useEffect(() => {
+  fetch('http://localhost:5000/api/categories')
+    .then(res => res.json())
+    .then(data => setCategories(data));
+}, []);
 
+const handleCategoryChange = (e) => {
+  const categoryId = e.target.value;
+  setNewProduct({ ...newProduct, category_id: categoryId });
 
-  useEffect(() => {
-    fetch('http://localhost:5000/api/categories')
-      .then(res => res.json())
-      .then(data => setCategories(data));
-  }, []);
-
-  const handleCategoryChange = (e) => {
-    const categoryId = e.target.value;
-    setNewProduct({ ...newProduct, category_id: categoryId });
-
-    // fetch subcategories
-    fetch(`http://localhost:5000/api/categories/${categoryId}/subcategories`)
-      .then(res => res.json())
-      .then(data => setSubcategories(data));
-  };
+  // fetch subcategories
+  fetch(`http://localhost:5000/api/categories/${categoryId}/subcategories`)
+    .then(res => res.json())
+    .then(data => setSubcategories(data));
+};
 
 
 
@@ -165,9 +196,19 @@ const AdminPage = () => {
 
     if (files.length === 0) {
       setSelectedFiles([]);
-      setMessage('');
-      return;
-    }
+    const file = e.target.files[0];
+    // if (file) {
+    //   Check file size (2MB = 2 * 1024 * 1024 bytes)
+    //   if (file.size > 2 * 1024 * 1024) {
+    //     showToast('File size must be less than 2MB. Please choose a smaller image.', 'warn', 1600);
+    //     setSelectedFile(null);
+    //     e.target.value = '';
+    //     return;
+    //   }
+    //   setSelectedFile(file);
+    //   setMessage('');
+    //   return;
+    // }
 
     const MAX_FILES = 5;
     let infoMessage = '';
@@ -245,7 +286,7 @@ const AdminPage = () => {
       }
     } catch (error) {
       console.error('Upload error:', error);
-      setMessage('Error uploading image');
+      showToast('Error uploading image', 'error', 1600);
     } finally {
       setLoading(false);
     }
@@ -323,7 +364,7 @@ const AdminPage = () => {
 
     if (!response.ok) throw new Error(data.error || 'Failed to add product');
 
-    alert('✅ Product added successfully!');
+    showToast('✅ Product added successfully!', 'success', 1200);
     setNewProduct({
       product_name: '',
       product_price: '',
@@ -344,12 +385,214 @@ const AdminPage = () => {
     fetchProducts();
   } catch (error) {
     console.error('Error adding product:', error);
-    alert('❌ Error adding product: ' + error.message);
+    showToast('❌ Error adding product: ' + error.message, 'error', 1600);
   } finally {
     setLoading(false);
   }
 };
 
+// Gift Card States
+const [newGiftCard, setNewGiftCard] = useState({
+  title: '',
+  brand: '',
+  sku: '',
+  base_price: '',
+  price_options: '',
+  description: ''
+});
+const [giftCardImages, setGiftCardImages] = useState([]);
+
+// Handle form input changes
+const handleGiftCardChange = (e) => {
+  setNewGiftCard({ ...newGiftCard, [e.target.name]: e.target.value });
+};
+
+// Handle image change
+const handleGiftCardImageChange = (e) => {
+  const files = Array.from(e.target.files || []);
+  const valid = files.filter(f => f.size <= 2 * 1024 * 1024);
+  if (valid.length !== files.length) {
+    showToast("Each image must be less than 2MB", 'warn', 1600);
+  }
+  setGiftCardImages(valid);
+};
+
+// Handle Gift Card submit
+const handleAddGiftCard = async (e) => {
+  e.preventDefault();
+  if (!giftCardImages || giftCardImages.length === 0) {
+    showToast("Please upload at least one image", 'warn', 1600);
+    return;
+  }
+
+  try {
+    setLoading(true);
+    const formData = new FormData();
+    formData.append("title", newGiftCard.title);
+    formData.append("brand", newGiftCard.brand);
+    formData.append("sku", newGiftCard.sku);
+    formData.append("base_price", newGiftCard.base_price);
+    formData.append("price_options", newGiftCard.price_options);
+    formData.append("description", newGiftCard.description);
+    giftCardImages.forEach((file) => formData.append("images", file));
+
+    const response = await axios.post("http://localhost:5000/api/giftcards", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+
+    if (response.data.success) {
+      showToast("🎁 Gift Card added successfully!", 'success', 1200);
+      setNewGiftCard({
+        title: '',
+        brand: '',
+        sku: '',
+        base_price: '',
+        price_options: '',
+        description: ''
+      });
+      setGiftCardImages([]);
+      // Refresh available gift cards below
+      fetchGiftCards();
+    } else {
+      showToast(response.data.message || "Failed to add gift card", 'error', 1600);
+    }
+  } catch (error) {
+    console.error("Gift Card Error:", error);
+    showToast("Error adding gift card", 'error', 1600);
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+// 🎁 Manage Gift Cards State
+const [giftCards, setGiftCards] = useState([]);
+const [loadingGiftCards, setLoadingGiftCards] = useState(false);
+
+// Fetch all gift cards
+const fetchGiftCards = async () => {
+  try {
+    setLoadingGiftCards(true);
+    const response = await axios.get("http://localhost:5000/api/giftcards");
+    if (response.data.success) {
+      setGiftCards(response.data.giftcards);
+    } else {
+      console.error("Failed to fetch gift cards");
+    }
+  } catch (error) {
+    console.error("Error fetching gift cards:", error);
+  } finally {
+    setLoadingGiftCards(false);
+  }
+};
+
+// Delete a gift card
+const handleDeleteGiftCard = (id) => {
+  askConfirm("Are you sure you want to delete this gift card?", async () => {
+    try {
+      const response = await axios.delete(`http://localhost:5000/api/giftcards/${id}`);
+      if (response.data.success) {
+        showToast("Gift Card deleted successfully!", 'success', 1200);
+        fetchGiftCards();
+      } else {
+        showToast(response.data.message || "Failed to delete gift card", 'error', 1600);
+      }
+    } catch (error) {
+      console.error("Error deleting gift card:", error);
+      showToast("Error deleting gift card", 'error', 1600);
+    }
+  });
+};
+
+// Load gift cards when Add Gift Card tab is active (so list shows below form)
+useEffect(() => {
+  if (activeTab === "giftcard") {
+    fetchGiftCards();
+  }
+}, [activeTab]);
+
+// Fetch all customer orders (no admin token required)
+const fetchAdminOrders = async (status = ordersStatusFilter) => {
+  setLoadingOrders(true);
+  setOrdersError("");
+  try {
+    const query = status && status !== 'all' ? `?status=${encodeURIComponent(status)}` : '';
+    const res = await fetch(`http://localhost:5000/api/orders${query}`, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    // Check if response is JSON
+    const contentType = res.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      const text = await res.text();
+      console.error('Non-JSON response:', text.substring(0, 200));
+      throw new Error('Server returned invalid response. Please check the server logs.');
+    }
+
+    const data = await res.json();
+    
+    if (!res.ok) {
+      throw new Error(data.message || `Failed to load orders: ${res.status} ${res.statusText}`);
+    }
+    
+    setAdminOrders(Array.isArray(data.orders) ? data.orders : []);
+  } catch (err) {
+    console.error('Error fetching orders:', err);
+    setOrdersError(err.message || 'Unable to fetch orders right now.');
+  } finally {
+    setLoadingOrders(false);
+  }
+};
+
+// Load orders when Orders tab becomes active
+useEffect(() => {
+  if (activeTab === 'orders') {
+    fetchAdminOrders();
+  }
+}, [activeTab]);
+
+// Refetch when filter changes while on orders tab
+useEffect(() => {
+  if (activeTab === 'orders') {
+    fetchAdminOrders(ordersStatusFilter);
+  }
+}, [ordersStatusFilter]);
+
+const handleAcceptOrder = (orderId) => {
+  askConfirm('Are you sure you want to accept this order?', async () => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/orders/${orderId}/accept`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      // Check if response is JSON
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await res.text();
+        console.error('Non-JSON response:', text.substring(0, 200));
+        throw new Error('Server returned invalid response. Please check the server logs.');
+      }
+
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.message || `Failed to accept order: ${res.status} ${res.statusText}`);
+      }
+      
+      showToast('✅ Order accepted successfully! Status changed from pending to accepted.', 'success', 2000);
+      // Refresh orders to show updated status
+      fetchAdminOrders();
+    } catch (err) {
+      console.error('Error accepting order:', err);
+      showToast(err.message || 'Could not accept the order. Please try again later.', 'error', 2000);
+    }
+  });
+};
 
   // Logout function
   const handleLogout = async () => {
@@ -425,31 +668,26 @@ const AdminPage = () => {
   };
 
   // Delete product
-  const handleDeleteProduct = async (productId) => {
-    if (!window.confirm('Are you sure you want to delete this product?')) {
-      return;
-    }
+  const handleDeleteProduct = (productId) => {
+    askConfirm('Are you sure you want to delete this product?', async () => {
+      try {
+        const response = await fetch(`http://localhost:5000/api/products/${productId}`, {
+          method: 'DELETE',
+        });
 
-    try {
-      const response = await fetch(`http://localhost:5000/api/products/${productId}`, {
-        method: 'DELETE',
-      });
+        const data = await response.json();
 
-      const data = await response.json();
-
-      if (data.success) {
-        setPopupMessage('Product deleted successfully!');
-        setShowPopup(true);
-        // Hide popup after 1 seconds
-        setTimeout(() => setShowPopup(false), 1000);
-        fetchProducts();
-      } else {
-        setMessage(data.message || 'Failed to delete product');
+        if (data.success) {
+          showToast('Product deleted successfully!', 'success', 1200);
+          fetchProducts();
+        } else {
+          showToast(data.message || 'Failed to delete product', 'error', 1600);
+        }
+      } catch (error) {
+        console.error('Delete error:', error);
+        showToast('Error deleting product', 'error', 1600);
       }
-    } catch (error) {
-      console.error('Delete error:', error);
-      setMessage('Error deleting product');
-    }
+    });
   };
 
   // Billing functions
@@ -491,6 +729,46 @@ const AdminPage = () => {
     setSelectedBillingProduct('');
     setBillingQuantity(1);
     setMessage('');
+  };
+
+  // Quick add to bag from Manage tab card
+  const handleQuickAddToBill = (productId) => {
+    const qty = parseInt(quickAddQty[productId] ?? 1, 10);
+    if (!qty || qty <= 0) {
+      setMessage('Please enter a valid quantity');
+      return;
+    }
+
+    const product = products.find(p => p.id === parseInt(productId));
+    if (!product) {
+      setMessage('Product not found');
+      return;
+    }
+
+    if (qty > product.stock_quantity) {
+      setMessage(`Only ${product.stock_quantity} items available in stock`);
+      return;
+    }
+
+    const existingItemIndex = billItems.findIndex(item => item.id === product.id);
+    if (existingItemIndex >= 0) {
+      const updatedItems = [...billItems];
+      updatedItems[existingItemIndex].quantity += qty;
+      setBillItems(updatedItems);
+    } else {
+      setBillItems([...billItems, {
+        id: product.id,
+        name: product.name,
+        price: parseFloat(product.price),
+        quantity: qty,
+      }]);
+    }
+
+    setQuickAddQty(prev => ({ ...prev, [productId]: 1 }));
+    setMessage('');
+    setPopupMessage('Added to bag');
+    setShowPopup(true);
+    setTimeout(() => setShowPopup(false), 800);
   };
 
   const handleRemoveFromBill = (productId) => {
@@ -536,7 +814,7 @@ const AdminPage = () => {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Bill - KiddyPalace</title>
+        <title>Bill - Kiddy Palace</title>
         <style>
           body {
             font-family: Arial, sans-serif;
@@ -601,7 +879,7 @@ const AdminPage = () => {
       </head>
       <body>
         <div class="bill-header">
-          <h1>KiddyPalace STORE</h1>
+          <h1>Kiddy Palace STORE</h1>
           <p>Tax Invoice</p>
         </div>
         
@@ -700,43 +978,54 @@ const AdminPage = () => {
                 <p className="admin-welcome">Welcome, {adminUser.full_name} ({adminUser.role})</p>
               )}
             </div>
-            <button className="logout-btn" onClick={handleLogout}>
-              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M9 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M16 17L21 12L16 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M21 12H9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              Logout
-            </button>
           </div>
           
           {/* Tab Navigation */}
           <div className="tab-navigation">
-            <button 
-              className={`tab-btn ${activeTab === 'add' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('add'); setMessage(''); }}
-            >
-              ➕ Add New Product
-            </button>
-            <button 
-              className={`tab-btn ${activeTab === 'upload' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('upload'); setMessage(''); }}
-            >
-              📸 Upload Product Images
-            </button>
-            <button 
-              className={`tab-btn ${activeTab === 'manage' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('manage'); setMessage(''); }}
-            >
-              📦 Manage Products
-            </button>
-            <button 
-              className={`tab-btn ${activeTab === 'billing' ? 'active' : ''}`}
-              onClick={() => { setActiveTab('billing'); setMessage(''); }}
-            >
-              💳 Billing (POS)
-            </button>
-          </div>
+  <button 
+    className={`tab-btn ${activeTab === 'add' ? 'active' : ''}`}
+    onClick={() => { setActiveTab('add'); setMessage(''); }}
+  >
+    ➕ Add New Product
+  </button>
+
+  <button 
+    className={`tab-btn ${activeTab === 'upload' ? 'active' : ''}`}
+    onClick={() => { setActiveTab('upload'); setMessage(''); }}
+  >
+    📸 Upload Product Images
+  </button>
+
+  <button 
+    className={`tab-btn ${activeTab === 'manage' ? 'active' : ''}`}
+    onClick={() => { setActiveTab('manage'); setMessage(''); }}
+  >
+    📦 Manage Products
+  </button>
+
+  <button 
+    className={`tab-btn ${activeTab === 'billing' ? 'active' : ''}`}
+    onClick={() => { setActiveTab('billing'); setMessage(''); }}
+  >
+    💳 Billing (POS)
+  </button>
+
+  {/* ✅ New Gift Card Tab */}
+  <button 
+    className={`tab-btn ${activeTab === 'giftcard' ? 'active' : ''}`}
+    onClick={() => { setActiveTab('giftcard'); setMessage(''); }}
+  >
+    🎁 Add Gift Card
+  </button>
+
+  <button 
+    className={`tab-btn ${activeTab === 'orders' ? 'active' : ''}`}
+    onClick={() => { setActiveTab('orders'); setMessage(''); }}
+  >
+    📬 Orders
+  </button>
+</div>
+
 
           {message && (
             <div className={`message ${message.includes('success') ? 'success' : 'error'}`}>
@@ -825,6 +1114,18 @@ const AdminPage = () => {
                     />
                   </div>
 
+                  {/* <div className="form-group">
+                    <label htmlFor="product_details">Product Details</label>
+                    <textarea
+                      id="product_details"
+                      name="product_details"
+                      value={newProduct.product_details}
+                      onChange={handleNewProductChange}
+                      placeholder="Enter product details..."
+                      rows="3"
+                    />
+                  </div> */}
+
                   <div className="form-group">
                     <label htmlFor="specifications">Product Specifications</label>
                     <textarea
@@ -837,6 +1138,17 @@ const AdminPage = () => {
                     />
                   </div>
 
+                  {/* <div className="form-group">
+                    <label htmlFor="brand_name">Brand Name</label>
+                    <textarea
+                      id="brand_name"
+                      name="brand_name"
+                      value={newProduct.brand_name}
+                      onChange={handleNewProductChange}
+                      placeholder="Enter additional details..."
+                      rows="3"
+                    />
+                  </div> */}
 
                   <div className="form-group">
                     <label htmlFor="brand_name">Brand Name</label>
@@ -894,6 +1206,17 @@ const AdminPage = () => {
                     />
                   </div>
 
+                  {/* <div className="form-group">
+                    <label htmlFor="age_range">Age Range</label>
+                    <input
+                      type="text"
+                      id="age_range"
+                      name="age_range"
+                      value={newProduct.age_range}
+                      onChange={handleNewProductChange}
+                      placeholder="3-8 years"
+                    />
+                  </div> */}
 
                   <div className="form-group">
                     <label htmlFor="age_range">Age Range</label>
@@ -1000,6 +1323,342 @@ const AdminPage = () => {
           )}
 
 
+          {/* Orders Tab */}
+          {activeTab === 'orders' && (
+            <div className="tab-content">
+              <h2>Customer Orders {adminOrders.length > 0 ? `(${adminOrders.length})` : ''}</h2>
+
+              {/* Filters */}
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '12px', 
+                margin: '12px 0 20px 0',
+                flexWrap: 'wrap'
+              }}>
+                <label style={{ fontWeight: 600 }}>Filter by status:</label>
+                <select
+                  value={ordersStatusFilter}
+                  onChange={(e) => setOrdersStatusFilter(e.target.value)}
+                  style={{
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    background: 'white'
+                  }}
+                >
+                  <option value="all">All</option>
+                  <option value="pending">Pending</option>
+                  <option value="processing">Processing</option>
+                  <option value="accepted">Accepted</option>
+                  <option value="shipped">Shipped</option>
+                  <option value="delivered">Delivered</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+                {ordersStatusFilter !== 'all' && (
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    <span style={{
+                      padding: '6px 12px',
+                      background: '#eef2ff',
+                      color: '#3730a3',
+                      borderRadius: '999px',
+                      fontSize: '0.85rem',
+                      fontWeight: 600,
+                      textTransform: 'capitalize'
+                    }}>
+                      {ordersStatusFilter}
+                    </span>
+                    <button
+                      onClick={() => setOrdersStatusFilter('all')}
+                      style={{
+                        padding: '6px 10px',
+                        border: '1px solid #e5e7eb',
+                        background: 'white',
+                        borderRadius: '8px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {loadingOrders && <div style={{ textAlign: 'center', padding: '40px' }}>Loading orders...</div>}
+              {ordersError && !loadingOrders && <p style={{ color: 'red', padding: '20px' }}>{ordersError}</p>}
+
+              {!loadingOrders && !ordersError && adminOrders.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '40px' }}>
+                  <p>No orders found.</p>
+                </div>
+              )}
+
+              {!loadingOrders && !ordersError && adminOrders.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  {adminOrders.map(order => {
+                    const orderDate = order.created_at 
+                      ? new Date(order.created_at).toLocaleString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })
+                      : 'Unknown date';
+
+                    const statusColors = {
+                      pending: '#f59e0b',
+                      accepted: '#10b981',
+                      processing: '#3b82f6',
+                      shipped: '#8b5cf6',
+                      delivered: '#059669',
+                      cancelled: '#ef4444'
+                    };
+
+                    return (
+                      <div 
+                        key={order.id} 
+                        style={{
+                          background: 'rgba(255, 247, 235, 0.92)',
+                          borderRadius: '12px',
+                          padding: '24px',
+                          border: '1px solid rgba(182, 158, 106, 0.25)',
+                          boxShadow: '0 4px 12px rgba(39, 60, 46, 0.08)'
+                        }}
+                      >
+                        {/* Order Header */}
+                        <div style={{ 
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          alignItems: 'flex-start',
+                          marginBottom: '20px',
+                          paddingBottom: '16px',
+                          borderBottom: '2px solid rgba(182, 158, 106, 0.3)'
+                        }}>
+                          <div>
+                            <h3 style={{ margin: '0 0 8px 0', color: '#273c2e', fontSize: '1.4rem' }}>
+                              Order #{order.order_number}
+                            </h3>
+                            <p style={{ margin: '0', color: '#666', fontSize: '0.9rem' }}>
+                              📅 Placed on: {orderDate}
+                            </p>
+                          </div>
+                          <div style={{
+                            padding: '8px 16px',
+                            borderRadius: '20px',
+                            background: statusColors[order.order_status] || '#6b7280',
+                            color: 'white',
+                            fontWeight: '600',
+                            textTransform: 'capitalize',
+                            fontSize: '0.9rem'
+                          }}>
+                            {order.order_status || 'pending'}
+                          </div>
+                        </div>
+
+                        {/* Customer Information */}
+                        <div style={{ marginBottom: '20px' }}>
+                          <h4 style={{ margin: '0 0 12px 0', color: '#273c2e', fontSize: '1.1rem' }}>
+                            👤 Customer Information
+                          </h4>
+                          <div style={{ 
+                            background: 'white', 
+                            padding: '16px', 
+                            borderRadius: '8px',
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+                            gap: '12px'
+                          }}>
+                            <div>
+                              <strong>Name:</strong> {order.shipping_full_name || 'N/A'}
+                            </div>
+                            <div>
+                              <strong>Email:</strong> {order.shipping_email || 'N/A'}
+                            </div>
+                            <div>
+                              <strong>Phone:</strong> {order.shipping_phone || 'N/A'}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Shipping Address */}
+                        <div style={{ marginBottom: '20px' }}>
+                          <h4 style={{ margin: '0 0 12px 0', color: '#273c2e', fontSize: '1.1rem' }}>
+                            📍 Shipping Address
+                          </h4>
+                          <div style={{ 
+                            background: 'white', 
+                            padding: '16px', 
+                            borderRadius: '8px',
+                            lineHeight: '1.8'
+                          }}>
+                            {order.shipping_full_name && <div>{order.shipping_full_name}</div>}
+                            <div>{order.shipping_address || 'N/A'}</div>
+                            <div>
+                              {order.shipping_city || ''}{order.shipping_state ? `, ${order.shipping_state}` : ''} {order.shipping_zip_code || ''}
+                            </div>
+                            <div>{order.shipping_country || 'India'}</div>
+                          </div>
+                        </div>
+
+                        {/* Order Items */}
+                        <div style={{ marginBottom: '20px' }}>
+                          <h4 style={{ margin: '0 0 12px 0', color: '#273c2e', fontSize: '1.1rem' }}>
+                            🛍️ Products Ordered
+                          </h4>
+                          <div style={{ 
+                            background: 'white', 
+                            padding: '16px', 
+                            borderRadius: '8px'
+                          }}>
+                            {Array.isArray(order.items) && order.items.length > 0 ? (
+                              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                <thead>
+                                  <tr style={{ borderBottom: '2px solid #ede6d9' }}>
+                                    <th style={{ padding: '10px', textAlign: 'left', color: '#273c2e' }}>Product Name</th>
+                                    <th style={{ padding: '10px', textAlign: 'center', color: '#273c2e' }}>Quantity</th>
+                                    <th style={{ padding: '10px', textAlign: 'right', color: '#273c2e' }}>Price</th>
+                                    <th style={{ padding: '10px', textAlign: 'right', color: '#273c2e' }}>Total</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {order.items.map((item, idx) => (
+                                    <tr key={item.id || idx} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                                      <td style={{ padding: '12px 10px' }}>{item.product_name || 'N/A'}</td>
+                                      <td style={{ padding: '12px 10px', textAlign: 'center' }}>{item.quantity || 0}</td>
+                                      <td style={{ padding: '12px 10px', textAlign: 'right' }}>
+                                        ₹{Number(item.product_price || 0).toFixed(2)}
+                                      </td>
+                                      <td style={{ padding: '12px 10px', textAlign: 'right', fontWeight: '600' }}>
+                                        ₹{Number(item.item_total || 0).toFixed(2)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            ) : (
+                              <p style={{ color: '#666', margin: 0 }}>No items found in this order.</p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Order Summary */}
+                        <div style={{ marginBottom: '20px' }}>
+                          <h4 style={{ margin: '0 0 12px 0', color: '#273c2e', fontSize: '1.1rem' }}>
+                            💰 Order Summary
+                          </h4>
+                          <div style={{ 
+                            background: 'white', 
+                            padding: '16px', 
+                            borderRadius: '8px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '8px'
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span>Subtotal:</span>
+                              <span>₹{Number(order.subtotal || 0).toFixed(2)}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span>GST (18%):</span>
+                              <span>₹{Number(order.gst_amount || 0).toFixed(2)}</span>
+                            </div>
+                            <div style={{ 
+                              display: 'flex', 
+                              justifyContent: 'space-between',
+                              paddingTop: '8px',
+                              borderTop: '2px solid #ede6d9',
+                              fontWeight: '700',
+                              fontSize: '1.1rem',
+                              color: '#273c2e'
+                            }}>
+                              <span>Total Amount:</span>
+                              <span>₹{Number(order.total_amount || 0).toFixed(2)}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
+                              <span>Payment Method:</span>
+                              <span style={{ 
+                                textTransform: 'uppercase', 
+                                fontWeight: '600',
+                                color: order.payment_method === 'cod' ? '#f59e0b' : '#10b981'
+                              }}>
+                                {order.payment_method || 'N/A'}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span>Payment Status:</span>
+                              <span style={{ 
+                                textTransform: 'uppercase', 
+                                fontWeight: '600',
+                                color: order.payment_status === 'completed' ? '#10b981' : '#f59e0b'
+                              }}>
+                                {order.payment_status || 'pending'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Accept Order Button */}
+                        {order.order_status === 'pending' && (
+                          <div style={{ 
+                            display: 'flex', 
+                            justifyContent: 'flex-end',
+                            paddingTop: '16px',
+                            borderTop: '2px solid rgba(182, 158, 106, 0.3)'
+                          }}>
+                            <button
+                              onClick={() => handleAcceptOrder(order.id)}
+                              style={{
+                                padding: '12px 24px',
+                                background: '#10b981',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '8px',
+                                fontSize: '1rem',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                                boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',
+                                transition: 'all 0.3s ease'
+                              }}
+                              onMouseOver={(e) => {
+                                e.target.style.background = '#059669';
+                                e.target.style.transform = 'translateY(-2px)';
+                              }}
+                              onMouseOut={(e) => {
+                                e.target.style.background = '#10b981';
+                                e.target.style.transform = 'translateY(0)';
+                              }}
+                            >
+                              ✅ Accept Order
+                            </button>
+                          </div>
+                        )}
+
+                        {order.order_status === 'accepted' && (
+                          <div style={{ 
+                            padding: '12px',
+                            background: '#d1fae5',
+                            borderRadius: '8px',
+                            textAlign: 'center',
+                            color: '#065f46',
+                            fontWeight: '600',
+                            marginTop: '16px'
+                          }}>
+                            ✓ Order Accepted
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Upload Images Tab */}
           {activeTab === 'upload' && (
             <div className="tab-content">
@@ -1093,6 +1752,23 @@ const AdminPage = () => {
                     </div>
                     <div className="product-info-section">
                       <h3>{product.name}</h3>
+                      {/* Quick Add to Bag (above description) */}
+                      <div className="quick-add-row" style={{ display: 'flex', gap: '8px', alignItems: 'center', margin: '6px 0 10px' }}>
+                        <input
+                          type="number"
+                          min="1"
+                          value={quickAddQty[product.id] ?? 1}
+                          onChange={(e) => setQuickAddQty(prev => ({ ...prev, [product.id]: parseInt(e.target.value || '1', 10) }))}
+                          style={{ width: '72px', padding: '6px 8px', border: '1px solid #ede6d9', borderRadius: '6px' }}
+                        />
+                        <button
+                          className="add-to-bag-btn"
+                          onClick={() => handleQuickAddToBill(product.id)}
+                          style={{ padding: '8px 12px', background: '#b69e6a', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                        >
+                          Add to Bag
+                        </button>
+                      </div>
                       <p className="product-desc">{product.description}</p>
                       <div className="product-meta">
                         <span className="meta-item">💰 ₹{product.price}</span>
@@ -1328,20 +2004,291 @@ const AdminPage = () => {
             </div>
           )}
         </div>
+
+        {activeTab === 'giftcard' && (
+  <div className="tab-content">
+    <h2>🎁 Add Gift Card</h2>
+    <form
+      onSubmit={handleAddGiftCard}
+      className="product-form"
+      encType="multipart/form-data"
+    >
+      <div className="form-group">
+        <label>Gift Card Title *</label>
+        <input
+          type="text"
+          name="title"
+          value={newGiftCard.title}
+          onChange={handleGiftCardChange}
+          placeholder="e.g., The Toycra Gift Card"
+          required
+        />
+      </div>
+
+      <div className="form-group">
+        <label>Brand *</label>
+        <input
+          type="text"
+          name="brand"
+          value={newGiftCard.brand}
+          onChange={handleGiftCardChange}
+          placeholder="e.g., Toycra"
+          required
+        />
+      </div>
+
+      <div className="form-group">
+        <label>SKU *</label>
+        <input
+          type="text"
+          name="sku"
+          value={newGiftCard.sku}
+          onChange={handleGiftCardChange}
+          placeholder="e.g., TG500"
+          required
+        />
+      </div>
+
+      <div className="form-group">
+        <label>Base Price *</label>
+        <input
+          type="number"
+          name="base_price"
+          value={newGiftCard.base_price}
+          onChange={handleGiftCardChange}
+          placeholder="500"
+          required
+        />
+      </div>
+
+      <div className="form-group">
+        <label>Available Values (comma separated)</label>
+        <input
+          type="text"
+          name="price_options"
+          value={newGiftCard.price_options}
+          onChange={handleGiftCardChange}
+          placeholder="500,1000,2000,5000"
+        />
+      </div>
+
+      <div className="form-group">
+        <label>Description *</label>
+        <textarea
+          name="description"
+          value={newGiftCard.description}
+          onChange={handleGiftCardChange}
+          placeholder="Write a short description..."
+          rows="3"
+          required
+        />
+      </div>
+
+      <div className="form-group">
+        <label>Upload Images *</label>
+        <input type="file" accept="image/*" onChange={handleGiftCardImageChange} multiple required />
+        {giftCardImages && giftCardImages.length > 0 && (
+          <p className="file-info">{giftCardImages.length} file(s) selected</p>
+        )}
+      </div>
+
+      <button type="submit" className="submit-btn" disabled={loading}>
+        {loading ? 'Uploading...' : '🎁 Add Gift Card'}
+      </button>
+    </form>
+
+    {/* Available gift cards list */}
+    <div style={{ marginTop: '24px' }}>
+      <h3>Available Gift Cards</h3>
+      {loadingGiftCards ? (
+        <p>Loading gift cards...</p>
+      ) : (
+        <div className="products-grid">
+          {giftCards.length === 0 ? (
+            <p>No gift cards available.</p>
+          ) : (
+            giftCards.map((gc) => (
+              <div key={gc.id} className="product-card-admin">
+                <div className="product-image-section">
+                  {gc.image_url ? (
+                    <img src={`http://localhost:5000${gc.image_url}`} alt={gc.title} />
+                  ) : (
+                    <div className="no-image">📦 No Image</div>
+                  )}
+                </div>
+                <div className="product-info-section">
+                  <h3>{gc.title}</h3>
+                  <div className="product-meta">
+                    <span className="meta-item">Brand: {gc.brand}</span>
+                    <span className="meta-item">SKU: {gc.sku}</span>
+                  </div>
+                  <div className="product-meta">
+                    <span className="meta-item">
+                      Price: ₹{(() => {
+                        try {
+                          const opts = gc.price_options ? JSON.parse(gc.price_options) : [];
+                          if (Array.isArray(opts) && opts.length > 0) return Number(opts[0]);
+                        } catch (_) {}
+                        return Number(gc.base_price || 0);
+                      })()}
+                    </span>
+                  </div>
+                  <div className="product-actions">
+                    <button 
+                      className="delete-btn"
+                      onClick={() => handleDeleteGiftCard(gc.id)}
+                    >
+                      🗑️ Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  </div>
+)}
+
+
         
-        {/* Popup for stock update success */}
-        {showPopup && ( 
+        {/* Legacy small popup */}
+        {showPopup && (
           <div className="popup-overlay">
             <div className="popup-box">
               <p>{popupMessage}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Centered polished toast (unified across admin actions) */}
+        {toast.show && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.2)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 2000,
+              backdropFilter: 'blur(2px)'
+            }}
+          >
+            <div
+              style={{
+                background: '#fff7eb',
+                color: '#273c2e',
+                border: '1px solid rgba(182, 158, 106, 0.35)',
+                borderRadius: 18,
+                boxShadow: '0 18px 40px rgba(39, 60, 46, 0.18)',
+                padding: '24px 28px',
+                width: 'min(92vw, 440px)',
+                textAlign: 'center',
+                transform: 'scale(1)',
+                animation: 'kpScaleIn 240ms ease-out',
+                fontWeight: 700,
+                position: 'relative'
+              }}
+            >
+              <div
+                style={{
+                  width: 54,
+                  height: 54,
+                  margin: '0 auto 12px',
+                  borderRadius: '50%',
+                  display: 'grid',
+                  placeItems: 'center',
+                  background:
+                    toast.kind === 'error'
+                      ? 'linear-gradient(135deg, #ef4444, #b91c1c)'
+                      : toast.kind === 'warn'
+                      ? 'linear-gradient(135deg, #f59e0b, #d97706)'
+                      : 'linear-gradient(135deg, #6fbf8c, #4f8f70)',
+                  color: '#fff7eb',
+                  boxShadow:
+                    toast.kind === 'error'
+                      ? '0 8px 20px rgba(239,68,68,0.35)'
+                      : toast.kind === 'warn'
+                      ? '0 8px 20px rgba(245,158,11,0.35)'
+                      : '0 8px 20px rgba(111,191,140,0.35)',
+                  border: '2px solid rgba(255,255,255,0.55)'
+                }}
+              >
+                {toast.kind === 'error' ? '!' : '✓'}
               </div>
+              <div style={{ fontSize: 18, letterSpacing: 0.2, marginBottom: 4 }}>
+                {toast.message}
               </div>
-            )}
+            </div>
+          </div>
+        )}
+
+        {/* Centered confirm modal for destructive actions */}
+        {confirmState.open && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 2000,
+              backdropFilter: 'blur(2px)'
+            }}
+          >
+            <div
+              style={{
+                background: '#fff7eb',
+                color: '#273c2e',
+                border: '1px solid rgba(182, 158, 106, 0.35)',
+                borderRadius: 18,
+                boxShadow: '0 18px 40px rgba(39, 60, 46, 0.18)',
+                padding: '24px 28px',
+                width: 'min(92vw, 480px)',
+                textAlign: 'center',
+                animation: 'kpScaleIn 240ms ease-out',
+                fontWeight: 700
+              }}
+            >
+              <div
+                style={{
+                  width: 54,
+                  height: 54,
+                  margin: '0 auto 12px',
+                  borderRadius: '50%',
+                  display: 'grid',
+                  placeItems: 'center',
+                  background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                  color: '#fff7eb',
+                  boxShadow: '0 8px 20px rgba(245,158,11,0.35)',
+                  border: '2px solid rgba(255,255,255,0.55)'
+                }}
+              >
+                !
+              </div>
+              <div style={{ fontSize: 18, letterSpacing: 0.2, marginBottom: 12 }}>
+                {confirmState.message}
+              </div>
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                <button className="save-stock-btn" onClick={handleConfirmYes} style={{ minWidth: 100 }}>
+                  Yes
+                </button>
+                <button className="cancel-stock-btn" onClick={handleConfirmNo} style={{ minWidth: 100 }}>
+                  No
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
 
       </main>
       <Footer />
     </div>
   );
 };
-
+}
 export default AdminPage;

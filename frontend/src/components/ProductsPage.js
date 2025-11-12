@@ -18,6 +18,9 @@ const ProductsPage = () => {
   const [popupMessage, setPopupMessage] = useState('');
   const productRefs = useRef({});
 
+  // 🔹 New state for sorting
+  const [sortOrder, setSortOrder] = useState('none');
+
   // Filters state (synced with URL)
   const [filters, setFilters] = useState({
     priceRange: 'all',
@@ -241,6 +244,13 @@ const ProductsPage = () => {
     return ok;
   });
 
+  // 🔹 Apply sorting to filtered products
+  const sortedProducts = [...filteredProducts].sort((a, b) => {
+    if (sortOrder === 'lowToHigh') return a.price - b.price;
+    if (sortOrder === 'highToLow') return b.price - a.price;
+    return 0;
+  });
+
   if (loading) {
     return (
       <div className="products-page">
@@ -345,17 +355,30 @@ const ProductsPage = () => {
                 ? `Category Products`
                 : 'Our Products'}
             </h1>
+
+            {/* 🔹 Sort By Dropdown */}
+            <div className="sort-by">
+              <label>Sort by:</label>
+              <select
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value)}
+              >
+                <option value="none">Default</option>
+                <option value="lowToHigh">Price: Low to High</option>
+                <option value="highToLow">Price: High to Low</option>
+              </select>
+            </div>
           </div>
 
           {message && <div className="message error">{message}</div>}
 
-          {filteredProducts.length === 0 ? (
+          {sortedProducts.length === 0 ? (
             <div className="no-products">
               <p>No products found.</p>
             </div>
           ) : (
             <div className="products-grid">
-              {filteredProducts.map((product) => (
+              {sortedProducts.map((product) => (
                 <div
                   key={product.id}
                   ref={(el) => (productRefs.current[product.id] = el)}

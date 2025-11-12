@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import Header from './Header';
@@ -8,6 +8,7 @@ import './CartPage.css';
 const CartPage = () => {
   const navigate = useNavigate();
   const { cartItems, removeFromCart, updateQuantity, getCartTotal, clearCart } = useCart();
+  const [toast, setToast] = useState({ show: false, message: '' });
 
   const handleQuantityChange = (productId, newQuantity) => {
     if (newQuantity < 1) return;
@@ -17,8 +18,11 @@ const CartPage = () => {
   const handleCheckout = () => {
     const user = localStorage.getItem('user');
     if (!user) {
-      alert('Please login to proceed to checkout');
-      navigate('/login');
+      setToast({ show: true, message: 'Please login to proceed to checkout' });
+      setTimeout(() => {
+        setToast({ show: false, message: '' });
+        navigate('/login');
+      }, 1200);
       return;
     }
     navigate('/checkout');
@@ -167,6 +171,61 @@ const CartPage = () => {
         </div>
       </main>
       <Footer />
+      {/* Centered Popup Toast */}
+      {toast.show && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000,
+            backdropFilter: 'blur(2px)'
+          }}
+        >
+          <div
+            style={{
+              background: '#fff7eb',
+              color: '#273c2e',
+              border: '1px solid rgba(182, 158, 106, 0.35)',
+              borderRadius: 18,
+              boxShadow: '0 18px 40px rgba(39, 60, 46, 0.18)',
+              padding: '24px 28px',
+              width: 'min(92vw, 440px)',
+              textAlign: 'center',
+              transform: 'scale(1)',
+              animation: 'kpScaleIn 240ms ease-out',
+              fontWeight: 700,
+              position: 'relative'
+            }}
+          >
+            <div
+              style={{
+                width: 54,
+                height: 54,
+                margin: '0 auto 12px',
+                borderRadius: '50%',
+                display: 'grid',
+                placeItems: 'center',
+                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                color: '#fff7eb',
+                boxShadow: '0 8px 20px rgba(245,158,11,0.35)',
+                border: '2px solid rgba(255,255,255,0.55)'
+              }}
+            >
+              !
+            </div>
+            <div style={{ fontSize: 18, letterSpacing: 0.2, marginBottom: 4 }}>
+              {toast.message}
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 500, color: '#4f6354' }}>
+              Redirecting to login...
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

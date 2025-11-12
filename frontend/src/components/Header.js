@@ -16,6 +16,11 @@ const Header = () => {
   const [searchOpen, setSearchOpen] = useState(false);
   const [showStoresDropdown, setShowStoresDropdown] = useState(false);
   const [showAuthDropdown, setShowAuthDropdown] = useState(false);
+  const [toast, setToast] = useState({ show: false, message: '' });
+
+  const [searchQuery, setSearchQuery] = useState('');
+  // const typingTimeout = useRef(null);
+
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -51,10 +56,14 @@ const Header = () => {
   const handleSignupClick = () => navigate('/signup');
   const handleLogout = () => {
     localStorage.removeItem('user');
-    localStorage.removeItem('cart');
+    localStorage.removeItem('token');
     setUser(null);
     setShowAuthDropdown(false);
-    window.location.reload();
+    // Inform cart context / app about user change
+    try { window.dispatchEvent(new Event('user-changed')); } catch {}
+    // Centered popup like login/signup success
+    setToast({ show: true, message: 'Logged out successfully!' });
+    setTimeout(() => setToast({ show: false, message: '' }), 1200);
   };
 
   const handleMouseEnter = async (categoryId) => {
@@ -77,6 +86,24 @@ const Header = () => {
     navigate(`/products?subcategory=${encodeURIComponent(subcategory)}`);
     setHoveredCategory(null);
     setSubcategories([]);
+  };
+
+  const handleGiftCardsClick = async () => {
+    try {
+      const res = await fetch('http://localhost:5000/api/giftcards');
+      const data = await res.json();
+      let cards = [];
+      if (Array.isArray(data)) cards = data;
+      else if (data && data.success && Array.isArray(data.giftcards)) cards = data.giftcards;
+      if (cards.length > 0) {
+        navigate(`/giftcards/${cards[0].id}`);
+      } else {
+        // Fallback to home if none
+        navigate('/');
+      }
+    } catch (e) {
+      navigate('/');
+    }
   };
 
   return (
@@ -277,7 +304,7 @@ const Header = () => {
             <li className="nav-item" onClick={() => navigate('/offers')}>
               Special Offers
             </li>
-            <li className="nav-item" onClick={() => navigate('/giftcards')}>
+            <li className="nav-item" onClick={handleGiftCardsClick}>
               Gift Cards
             </li>
             {/* ✅ Role-Based Admin Access */}
@@ -297,19 +324,34 @@ const Header = () => {
           </div>
 
           {searchOpen && (
-            <div className="mini-search">
-              <input
-                type="text"
-                placeholder="Search..."
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && e.target.value.trim()) {
-                    navigate(`/products?search=${encodeURIComponent(e.target.value.trim())}`);
-                    setSearchOpen(false);
-                  }
-                }}
-              />
-            </div>
-          )}
+  <div className="mini-search">
+    <input
+      type="text"
+      placeholder="Search..."
+      value={searchQuery}
+      onChange={(e) => {
+        const value = e.target.value;
+        setSearchQuery(value);
+
+        // 🔹 Automatically navigate and update products while typing
+        if (value.trim().length >= 2) {
+          navigate(`/products?search=${encodeURIComponent(value.trim())}`);
+        } else if (value.trim().length === 0) {
+          // Clear search: show all products again
+          navigate(`/products`);
+        }
+      }}
+      onKeyDown={(e) => {
+        // Still support Enter key if user presses it
+        if (e.key === 'Enter' && e.target.value.trim()) {
+          navigate(`/products?search=${encodeURIComponent(e.target.value.trim())}`);
+          setSearchOpen(false);
+        }
+      }}
+    />
+  </div>
+)}
+
 
           {/* 👤 Profile Section */}
           <div className="auth-container">
@@ -321,12 +363,22 @@ const Header = () => {
               <User size={22} />
             </div>
 
+            {/* Dropdown Menu */}
             <div className={`auth-dropdown ${showAuthDropdown ? 'show' : ''}`}>
               {user ? (
                 <>
                   <span className="user-greeting">
                     Hi, {user.firstName || user.fullName} {user.role === 'super_admin' && '(Admin)'}
                   </span>
+                  <button
+                    className="orders-btn"
+                    onClick={() => {
+                      navigate('/orders');
+                      setShowAuthDropdown(false);
+                    }}
+                  >
+                    My Orders
+                  </button>
 
                   <button className="logout-btn" onClick={handleLogout}>
                     Logout
@@ -358,6 +410,61 @@ const Header = () => {
           </div>
         </div>
       </div>
+      {/* Centered Popup Toast for logout */}
+      {toast.show && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 2000,
+            backdropFilter: 'blur(2px)'
+          }}
+        >
+          <div
+            style={{
+              background: '#fff7eb',
+              color: '#273c2e',
+              border: '1px solid rgba(182, 158, 106, 0.35)',
+              borderRadius: 18,
+              boxShadow: '0 18px 40px rgba(39, 60, 46, 0.18)',
+              padding: '24px 28px',
+              width: 'min(92vw, 440px)',
+              textAlign: 'center',
+              transform: 'scale(1)',
+              animation: 'kpScaleIn 240ms ease-out',
+              fontWeight: 700,
+              position: 'relative'
+            }}
+          >
+            <div
+              style={{
+                width: 54,
+                height: 54,
+                margin: '0 auto 12px',
+                borderRadius: '50%',
+                display: 'grid',
+                placeItems: 'center',
+                background: 'linear-gradient(135deg, #6fbf8c, #4f8f70)',
+                color: '#fff7eb',
+                boxShadow: '0 8px 20px rgba(111,191,140,0.35)',
+                border: '2px solid rgba(255,255,255,0.55)'
+              }}
+            >
+              ✓
+            </div>
+            <div style={{ fontSize: 18, letterSpacing: 0.2, marginBottom: 4 }}>
+              {toast.message}
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 500, color: '#4f6354' }}>
+              See you soon!
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

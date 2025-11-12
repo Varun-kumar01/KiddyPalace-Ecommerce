@@ -20,26 +20,25 @@ export const CartProvider = ({ children }) => {
   // ✅ Initialize cart from localStorage
   const getInitialCart = () => {
     try {
-      const saved = localStorage.getItem('cart');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch (err) {
-      console.error('Error reading cart from localStorage during init:', err);
-      try {
-        localStorage.removeItem('cart');
-      } catch (e) {}
+      const raw = localStorage.getItem('user');
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      // Prefer stable id field; fallback to email
+      return parsed?.id ?? parsed?.userId ?? parsed?.email ?? null;
+    } catch {
+      return null;
     }
-    return [];
   };
 
-  const [cartItems, setCartItems] = useState(getInitialCart);
+  const getCartStorageKey = (userId) => {
+    return userId ? `cart:${String(userId)}` : 'cart:guest';
+  };
 
   // ✅ Persist cart updates to localStorage
   useEffect(() => {
     try {
-      localStorage.setItem('cart', JSON.stringify(cartItems));
+      const key = getCartStorageKey(currentUserId);
+      localStorage.setItem(key, JSON.stringify(cartItems));
     } catch (error) {
       console.error('Error saving cart to localStorage:', error);
     }
@@ -61,13 +60,13 @@ export const CartProvider = ({ children }) => {
 
   // ✅ Add to Cart
   const addToCart = (product, quantity = 1) => {
-    const prod = normalizeProduct(product);
     setCartItems((prevItems) => {
-      const existingItem = prevItems.find((item) => item.id === prod.id);
+      const existingItem = prevItems.find((item) => item.id === product.id);
+      
       if (existingItem) {
         return prevItems.map((item) =>
-          item.id === prod.id
-            ? { ...item, quantity: (Number(item.quantity) || 0) + Number(quantity) }
+          item.id === product.id
+            ? { ...item, quantity: item.quantity + quantity }
             : item
         );
       } else {
