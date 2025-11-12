@@ -206,7 +206,7 @@ const PaymentPage = () => {
   };
 
   const payButtonLabel = paymentOption === 'online'
-    ? `Pay ₹${orderData.total.toFixed(2)}`
+    ? `Pay ₹${Number(orderData.total).toFixed(2)}`
     : 'Place Order (COD)';
 
   return (

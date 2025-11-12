@@ -3,7 +3,8 @@ import React, {
   useState,
   useContext,
   useEffect,
-  useCallback, // ✅ <-- add this import
+  useCallback, 
+  useRef // ✅ <-- add this import
 } from 'react';
 
 const CartContext = createContext();
@@ -17,8 +18,11 @@ export const useCart = () => {
 };
 
 export const CartProvider = ({ children }) => {
-  // ✅ Initialize cart from localStorage
-  const getInitialCart = () => {
+  const [cartItems, setCartItems] = useState([]);
+  const [currentUserId, setCurrentUserId] = useState(null);
+  const prevUserIdRef = useRef(null);
+
+  const getUserIdFromLocalStorage = () => {
     try {
       const raw = localStorage.getItem('user');
       if (!raw) return null;
@@ -34,7 +38,46 @@ export const CartProvider = ({ children }) => {
     return userId ? `cart:${String(userId)}` : 'cart:guest';
   };
 
-  // ✅ Persist cart updates to localStorage
+  // Determine current user at startup
+  useEffect(() => {
+    const userId = getUserIdFromLocalStorage();
+    setCurrentUserId(userId);
+  }, []);
+
+  // Respond to user changes (custom event + storage event)
+  useEffect(() => {
+    const onUserChanged = () => {
+      const userId = getUserIdFromLocalStorage();
+      setCurrentUserId(userId);
+    };
+    window.addEventListener('user-changed', onUserChanged);
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'user') onUserChanged();
+    });
+    return () => {
+      window.removeEventListener('user-changed', onUserChanged);
+    };
+  }, []);
+
+  // Load cart when user changes
+  useEffect(() => {
+    if (prevUserIdRef.current === currentUserId) return;
+    prevUserIdRef.current = currentUserId;
+    try {
+      const key = getCartStorageKey(currentUserId);
+      const savedCart = localStorage.getItem(key);
+      if (savedCart) {
+        const parsedCart = JSON.parse(savedCart);
+        setCartItems(Array.isArray(parsedCart) ? parsedCart : []);
+      } else {
+        setCartItems([]);
+      }
+    } catch (error) {
+      console.error('Error loading cart from localStorage:', error);
+    }
+  }, [currentUserId]);
+
+  // Save cart to localStorage whenever it changes for the current user key
   useEffect(() => {
     try {
       const key = getCartStorageKey(currentUserId);
@@ -62,7 +105,6 @@ export const CartProvider = ({ children }) => {
   const addToCart = (product, quantity = 1) => {
     setCartItems((prevItems) => {
       const existingItem = prevItems.find((item) => item.id === product.id);
-      
       if (existingItem) {
         return prevItems.map((item) =>
           item.id === product.id

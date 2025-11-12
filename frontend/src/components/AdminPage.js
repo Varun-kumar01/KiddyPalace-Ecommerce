@@ -196,19 +196,9 @@ const handleCategoryChange = (e) => {
 
     if (files.length === 0) {
       setSelectedFiles([]);
-    const file = e.target.files[0];
-    // if (file) {
-    //   Check file size (2MB = 2 * 1024 * 1024 bytes)
-    //   if (file.size > 2 * 1024 * 1024) {
-    //     showToast('File size must be less than 2MB. Please choose a smaller image.', 'warn', 1600);
-    //     setSelectedFile(null);
-    //     e.target.value = '';
-    //     return;
-    //   }
-    //   setSelectedFile(file);
-    //   setMessage('');
-    //   return;
-    // }
+      setMessage('');
+      return;
+    }
 
     const MAX_FILES = 5;
     let infoMessage = '';
@@ -2290,5 +2280,5 @@ const handleAcceptOrder = (orderId) => {
     </div>
   );
 };
-}
+
 export default AdminPage;
