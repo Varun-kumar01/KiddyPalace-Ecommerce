@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate, useParams,  } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import Header from './Header';
 import Footer from './Footer';
@@ -8,10 +8,14 @@ import './ProductDetails.css';
 const ProductDetails = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { product } = location.state || {};
+  const params = useParams();
+  const [product, setProduct] = useState(() => (location.state && location.state.product) ? location.state.product : null);
+  const [loading, setLoading] = useState(!((location.state && location.state.product)));
+  const [error, setError] = useState("");
   const { addToCart } = useCart();
 
   const [activeSection, setActiveSection] = useState("returns");
+  const [activeImage, setActiveImage] = useState(null);
 
   const toggleAccordion = (index) => {
     setActiveSection(activeSection === index ? null : index);
@@ -24,6 +28,106 @@ const ProductDetails = () => {
     console.log('Product Details:', product.product_details);
     console.log('Specifications:', product.specifications);
     console.log('Additional Details:', product.additional_details);
+  }
+
+  const productId = useMemo(() => {
+    if (location.state && location.state.product?.id) return location.state.product.id;
+    if (params && params.id) return params.id;
+    return null;
+  }, [location.state, params]);
+
+  // Keep local product state in sync with navigation state
+  useEffect(() => {
+    if (location.state && location.state.product) {
+      setProduct(location.state.product);
+    }
+  }, [location.state]);
+
+  const imageSources = useMemo(() => {
+    if (!product) return [];
+
+    const orderedSources = [
+      ...(Array.isArray(product.imageGallery) ? product.imageGallery : []),
+      ...(Array.isArray(product.images) ? product.images : []),
+      product.image,
+      ...(Array.isArray(product.additionalImages) ? product.additionalImages : [])
+    ].filter(Boolean);
+
+    const uniqueSources = [];
+    const seen = new Set();
+
+    orderedSources.forEach((src) => {
+      if (!seen.has(src)) {
+        seen.add(src);
+        uniqueSources.push(src);
+      }
+    });
+
+    return uniqueSources;
+  }, [product]);
+
+  useEffect(() => {
+    if (imageSources.length === 0) {
+      setActiveImage(null);
+      return;
+    }
+
+    setActiveImage((current) => (current && imageSources.includes(current) ? current : imageSources[0]));
+  }, [imageSources]);
+
+  useEffect(() => {
+    if (!productId) return;
+
+    const needsRefresh =
+      !product ||
+      String(product.id) !== String(productId) ||
+      !Array.isArray(product.imageGallery);
+
+    if (!needsRefresh) return;
+
+    const controller = new AbortController();
+    const fetchProduct = async () => {
+      try {
+        if (!product) {
+          setLoading(true);
+        }
+        const res = await fetch(`http://localhost:5000/api/products/${productId}`, { signal: controller.signal });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || 'Failed to fetch product');
+        }
+        setProduct(data.product);
+      } catch (e) {
+        if (e.name !== 'AbortError') {
+          setError(e.message || 'Failed to load product');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProduct();
+    return () => controller.abort();
+  }, [productId, product]);
+
+  // const toggleAccordion = (index) => {
+  //   setActiveSection(activeSection === index ? null : index);
+  // };
+
+  if (loading) {
+    return (
+      <div className="no-product">
+        <p>Loading product...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="no-product">
+        <p>{error}</p>
+        <button onClick={() => navigate(-1)}>Go Back</button>
+      </div>
+    );
   }
 
   if (!product) {
@@ -52,12 +156,17 @@ const ProductDetails = () => {
           {/* Left: Images */}
           <div className="product-images">
             <div className="thumbnails">
-              {images.map((img, i) => (
-                <img key={i} src={img} alt={`thumb-${i}`} className="thumbnail" />
+              {imageSources.map((img, i) => (
+                <img key={i} src={img} alt={`thumb-${i}`} 
+                className={`thumbnail ${activeImage === img ? 'active' : ''}`}
+                onClick={() => setActiveImage(img)} />
               ))}
             </div>
             <div className="main-image">
-              <img src={product.image} alt={product.name} />
+              <img
+                src={activeImage || product.image || imageSources[0] || ''}
+                alt={product.name}
+              />
             </div>
           </div>
 
@@ -79,14 +188,8 @@ const ProductDetails = () => {
 
             <div className="actions">
               <button className="add-btn" onClick={() => addToCart(product)}>Add to bag</button>
-              <button className="buy-btn">Buy Now</button>
+              <button className="buy-btn" onClick={() => navigate('/checkout', { state: { product } })}>Buy Now</button>
             </div>
-
-            {/* <div className="pincode-section">
-              <p>Pincode Check:</p>
-              <input type="text" placeholder="Enter your pincode" />
-              <button className="check-btn">Check</button>
-            </div> */}
           </div>
         </div>
 
@@ -117,20 +220,7 @@ const ProductDetails = () => {
             )}
           </div>
 
-          {/* <div className="accordion-item">
-            <button className="accordion-header" onClick={() => toggleAccordion(2)}>
-              Product Details <span>{activeSection === 2 ? "−" : "+"}</span>
-            </button>
-            {activeSection === 2 && (
-              <div className="accordion-content">
-                {product.product_details ? (
-                  <p>{product.product_details}</p>
-                ) : (
-                  <p>No product details available</p>
-                )}
-              </div>
-            )}
-          </div> */}
+          
 
           <div className="accordion-item">
             <button className="accordion-header" onClick={() => toggleAccordion(3)}>
@@ -147,20 +237,7 @@ const ProductDetails = () => {
             )}
           </div>
 
-          {/* <div className="accordion-item">
-            <button className="accordion-header" onClick={() => toggleAccordion(4)}>
-              Additional Details <span>{activeSection === 4 ? "−" : "+"}</span>
-            </button>
-            {activeSection === 4 && (
-              <div className="accordion-content">
-                {product.additional_details ? (
-                  <p>{product.additional_details}</p>
-                ) : (
-                  <p>No additional details available</p>
-                )}
-              </div>
-            )}
-          </div> */}
+
         </div>
 
         {/* Tabs Section */}

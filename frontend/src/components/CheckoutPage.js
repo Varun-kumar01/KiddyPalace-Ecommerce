@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import Header from './Header';
 import Footer from './Footer';
@@ -7,7 +8,13 @@ import './CheckoutPage.css';
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { cartItems, getCartTotal } = useCart();
+  // ✅ Detect if coming from "Buy Now"
+const singleProduct = location.state?.product;
+const itemsToCheckout = singleProduct ? [singleProduct] : cartItems;
+
+
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -72,16 +79,15 @@ const CheckoutPage = () => {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
 
     // Calculate order totals
-    const subtotal = getCartTotal();
-    const gst = subtotal * 0.18;
-    const total = subtotal + gst;
+    const subtotal = singleProduct ? singleProduct.price : getCartTotal();
+    const total = subtotal;
 
     // Prepare order data
     const orderData = {
       userId: user.id || null,
-      items: cartItems,
+      items: singleProduct ? [singleProduct] : cartItems,
       subtotal: subtotal,
-      gst: gst,
+      // gst: gst,
       total: total,
       shippingAddress: {
         fullName: `${formData.firstName} ${formData.lastName}`,
@@ -99,7 +105,7 @@ const CheckoutPage = () => {
     navigate('/payment', { state: { orderData } });
   };
 
-  if (cartItems.length === 0) {
+  if (!itemsToCheckout || itemsToCheckout.length === 0) {
     return (
       <div className="checkout-page">
         <Header />
@@ -271,36 +277,35 @@ const CheckoutPage = () => {
             <div className="order-summary-section">
               <h2>Order Summary</h2>
               <div className="summary-items">
-                {cartItems.map((item) => (
-                  <div key={item.id} className="summary-item">
-                    <div className="item-info">
-                      <span className="item-name">{item.name}</span>
-                      <span className="item-qty">× {item.quantity}</span>
-                    </div>
-                    <span className="item-price">₹{(item.price * item.quantity).toFixed(2)}</span>
-                  </div>
-                ))}
-              </div>
+  {itemsToCheckout.map((item) => (
+    <div key={item.id} className="summary-item">
+      <div className="item-info">
+        <span className="item-name">{item.name}</span>
+        <span className="item-qty">× {item.quantity || 1}</span>
+      </div>
+      <span className="item-price">
+        ₹{((item.price || 0) * (item.quantity || 1)).toFixed(2)}
+      </span>
+    </div>
+  ))}
+</div>
 
-              <div className="summary-totals">
-                <div className="total-row">
-                  <span>Subtotal:</span>
-                  <span>₹{getCartTotal().toFixed(2)}</span>
-                </div>
-                <div className="total-row">
-                  <span>Shipping:</span>
-                  <span className="free">FREE</span>
-                </div>
-                <div className="total-row">
-                  <span>Tax (GST 18%):</span>
-                  <span>₹{(getCartTotal() * 0.18).toFixed(2)}</span>
-                </div>
-                <div className="total-divider"></div>
-                <div className="total-row grand-total">
-                  <span>Total:</span>
-                  <span>₹{(getCartTotal() * 1.18).toFixed(2)}</span>
-                </div>
-              </div>
+<div className="summary-totals">
+  <div className="total-row">
+    <span>Subtotal:</span>
+    <span>₹{(Number(singleProduct ? singleProduct.price : getCartTotal())).toFixed(2)}</span>
+  </div>
+  <div className="total-row">
+    <span>Shipping:</span>
+    <span className="free">FREE</span>
+  </div>
+  <div className="total-divider"></div>
+  <div className="total-row grand-total">
+    <span>Total:</span>
+    <span>₹{(Number(singleProduct ? singleProduct.price : getCartTotal())).toFixed(2)}</span>
+  </div>
+</div>
+
             </div>
           </div>
         </div>

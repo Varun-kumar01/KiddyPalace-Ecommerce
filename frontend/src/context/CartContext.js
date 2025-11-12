@@ -1,4 +1,10 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, {
+  createContext,
+  useState,
+  useContext,
+  useEffect,
+  useCallback, // ✅ <-- add this import
+} from 'react';
 
 const CartContext = createContext();
 
@@ -11,7 +17,7 @@ export const useCart = () => {
 };
 
 export const CartProvider = ({ children }) => {
-  // Initialize cart synchronously from localStorage to avoid a flash/overwrite
+  // ✅ Initialize cart from localStorage
   const getInitialCart = () => {
     try {
       const saved = localStorage.getItem('cart');
@@ -30,7 +36,7 @@ export const CartProvider = ({ children }) => {
 
   const [cartItems, setCartItems] = useState(getInitialCart);
 
-  // Save cart to localStorage whenever it changes
+  // ✅ Persist cart updates to localStorage
   useEffect(() => {
     try {
       localStorage.setItem('cart', JSON.stringify(cartItems));
@@ -39,9 +45,9 @@ export const CartProvider = ({ children }) => {
     }
   }, [cartItems]);
 
-  // Helper to normalize product shape so stored items are consistent and serializable
+  // ✅ Normalize product structure for consistent cart data
   const normalizeProduct = (p) => {
-    const id = p.id ?? p.sno ?? p.product_id ?? '${Date.now()}-${Math.random()}';
+    const id = p.id ?? p.sno ?? p.product_id ?? `${Date.now()}-${Math.random()}`;
     return {
       id,
       name: p.name ?? p.product_name ?? '',
@@ -49,40 +55,38 @@ export const CartProvider = ({ children }) => {
       image: p.image ?? (Array.isArray(p.images) ? p.images[0] : '') ?? '',
       stock_quantity: p.stock_quantity ?? p.stock_qty ?? p.stock ?? 999,
       description: p.description ?? '',
-      // keep any other useful fields
       ...p,
     };
   };
 
+  // ✅ Add to Cart
   const addToCart = (product, quantity = 1) => {
     const prod = normalizeProduct(product);
     setCartItems((prevItems) => {
       const existingItem = prevItems.find((item) => item.id === prod.id);
-
       if (existingItem) {
-        // Update quantity if item already in cart
         return prevItems.map((item) =>
           item.id === prod.id
             ? { ...item, quantity: (Number(item.quantity) || 0) + Number(quantity) }
             : item
         );
       } else {
-        // Add new item to cart
         return [...prevItems, { ...prod, quantity: Number(quantity) }];
       }
     });
   };
 
+  // ✅ Remove item
   const removeFromCart = (productId) => {
     setCartItems((prevItems) => prevItems.filter((item) => item.id !== productId));
   };
 
+  // ✅ Update item quantity
   const updateQuantity = (productId, quantity) => {
     if (quantity <= 0) {
       removeFromCart(productId);
       return;
     }
-    
     setCartItems((prevItems) =>
       prevItems.map((item) =>
         item.id === productId ? { ...item, quantity } : item
@@ -90,17 +94,22 @@ export const CartProvider = ({ children }) => {
     );
   };
 
-  const clearCart = () => {
+  // ✅ Clear cart (memoized)
+  const clearCart = useCallback(() => {
     setCartItems([]);
     localStorage.removeItem('cart');
-  };
+  }, []);
 
+  // ✅ Cart total and count helpers
   const getCartTotal = () => {
-    return cartItems.reduce((total, item) => total + item.price * item.quantity, 0);
+    return cartItems.reduce(
+      (total, item) => total + (Number(item.price) || 0) * (Number(item.quantity) || 1),
+      0
+    );
   };
 
   const getCartCount = () => {
-    return cartItems.reduce((count, item) => count + item.quantity, 0);
+    return cartItems.reduce((count, item) => count + (Number(item.quantity) || 0), 0);
   };
 
   const value = {

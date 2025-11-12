@@ -11,7 +11,7 @@ const AdminPage = () => {
 
    // ✅ State declarations
   const [products, setProducts] = useState([]);
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const [selectedProductId, setSelectedProductId] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(true);
@@ -92,7 +92,7 @@ const AdminPage = () => {
     stock_quantity: ''
   });
 
-  const [newProductImage, setNewProductImage] = useState(null);
+  const [newProductImages, setNewProductImages] = useState([]);
   
   // Edit stock state
   const [editingProductId, setEditingProductId] = useState(null);
@@ -161,18 +161,33 @@ const AdminPage = () => {
   };
 
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      // Check file size (2MB = 2 * 1024 * 1024 bytes)
-      if (file.size > 2 * 1024 * 1024) {
-        setMessage('File size must be less than 2MB. Please choose a smaller image.');
-        setSelectedFile(null);
-        e.target.value = '';
-        return;
-      }
-      setSelectedFile(file);
+    const files = Array.from(e.target.files || []);
+
+    if (files.length === 0) {
+      setSelectedFiles([]);
       setMessage('');
+      return;
     }
+
+    const MAX_FILES = 5;
+    let infoMessage = '';
+
+    if (files.length > MAX_FILES) {
+      infoMessage = `You can upload a maximum of ${MAX_FILES} images at a time.`;
+    }
+
+    const selected = files.slice(0, MAX_FILES);
+    const oversized = selected.find((file) => file.size > 2 * 1024 * 1024);
+
+    if (oversized) {
+      setMessage('Each image must be less than 2MB.');
+      e.target.value = '';
+      setSelectedFiles([]);
+      return;
+    }
+
+    setSelectedFiles(selected);
+    setMessage(infoMessage);
   };
 
   const handleProductSelect = (e) => {
@@ -183,36 +198,50 @@ const AdminPage = () => {
   const handleUpload = async (e) => {
     e.preventDefault();
 
-    if (!selectedFile || !selectedProductId) {
+    if (selectedFiles.length === 0 || !selectedProductId) {
       setMessage('Please select both a product and an image file');
       return;
     }
 
     setLoading(true);
     const formData = new FormData();
-    formData.append('image', selectedFile);
-
+    if (selectedFiles.length > 0) {
+      selectedFiles.forEach((file) => formData.append('images', file));
+      formData.append('primaryImageIndex', '0');
+    }
     try {
       const response = await fetch(`http://localhost:5000/api/products/${selectedProductId}/image`, {
         method: 'PUT',
         body: formData,
       });
 
-      const data = await response.json();
+      // const data = await response.json();
 
-      if (data.success) {
+      let responseBody = '';
+      let data = '' ;  
+
+      try {
+        responseBody = await response.text();
+        data = responseBody ? JSON.parse(responseBody) : null;
+      } catch (parseError) {
+        console.warn('Unable to parse upload response as JSON:', parseError);
+      }
+
+      if (response.ok && data?.success) {
         setPopupMessage('Image uploaded successfully!');
         setShowPopup(true);
         // Hide popup after 1 seconds
         setTimeout(() => setShowPopup(false), 1000);
-        setSelectedFile(null);
+        setSelectedFiles([]);
         setSelectedProductId('');
+        setMessage('');
         // Refresh products
         fetchProducts();
         // Reset file input
         document.getElementById('file-input').value = '';
       } else {
-        setMessage(data.message || 'Failed to upload image');
+        const errorMessage = data?.message || responseBody || 'Failed to upload image';
+        setMessage(errorMessage);
       }
     } catch (error) {
       console.error('Upload error:', error);
@@ -231,16 +260,33 @@ const AdminPage = () => {
   };
 
   const handleNewProductImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        setMessage('Image size must be less than 2MB');
-        e.target.value = '';
-        return;
-      }
-      setNewProductImage(file);
+    const files = Array.from(e.target.files || []);
+
+    if (files.length === 0) {
+      setNewProductImages([]);
       setMessage('');
+      return;
     }
+
+    const MAX_FILES = 5;
+    let infoMessage = '';
+
+    if (files.length > MAX_FILES) {
+      infoMessage = `You can upload a maximum of ${MAX_FILES} images per product.`;
+    }
+
+    const selectedFiles = files.slice(0, MAX_FILES);
+    const oversized = selectedFiles.find((file) => file.size > 2 * 1024 * 1024);
+
+    if (oversized) {
+      setMessage('Each image must be less than 2MB.');
+      e.target.value = '';
+      setNewProductImages([]);
+      return;
+    }
+
+    setNewProductImages(selectedFiles);
+    setMessage(infoMessage);
   };
 
  const handleAddProduct = async (e) => {
@@ -262,9 +308,10 @@ const AdminPage = () => {
     formData.append('product_details', newProduct.product_details || '');
     formData.append('brand_name', newProduct.brand_name || '');
 
-    if (newProductImage) {
-      formData.append('image', newProductImage);
-      formData.append('image_type', newProductImage.type); // optional
+    if (newProductImages.length > 0) {
+      newProductImages.forEach((file) => {
+        formData.append('images', file);
+      });
     }
 
     const response = await fetch('http://localhost:5000/api/products', {
@@ -292,7 +339,7 @@ const AdminPage = () => {
       subcategory_id: '',
       stock_quantity: ''
     });
-    setNewProductImage(null);
+    setNewProductImages([]);
     document.getElementById('product_image').value = '';
     fetchProducts();
   } catch (error) {
@@ -469,9 +516,9 @@ const AdminPage = () => {
 
   const calculateBillTotal = () => {
     const subtotal = billItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const gst = subtotal * 0.18;
-    const total = subtotal + gst;
-    return { subtotal, gst, total };
+    // const gst = subtotal * 0.18;
+    const total = subtotal;
+    return { subtotal, total };
   };
 
   const handlePrintBill = () => {
@@ -480,7 +527,7 @@ const AdminPage = () => {
       return;
     }
 
-    const { subtotal, gst, total } = calculateBillTotal();
+    const { subtotal, total } = calculateBillTotal();
     const billDate = new Date().toLocaleString();
 
     // Create print window
@@ -489,7 +536,7 @@ const AdminPage = () => {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Bill - E-Commerce</title>
+        <title>Bill - KiddyPalace</title>
         <style>
           body {
             font-family: Arial, sans-serif;
@@ -554,7 +601,7 @@ const AdminPage = () => {
       </head>
       <body>
         <div class="bill-header">
-          <h1>E-COMMERCE STORE</h1>
+          <h1>KiddyPalace STORE</h1>
           <p>Tax Invoice</p>
         </div>
         
@@ -592,10 +639,7 @@ const AdminPage = () => {
             <span>Subtotal:</span>
             <span>₹${subtotal.toFixed(2)}</span>
           </div>
-          <div class="total-row">
-            <span>GST (18%):</span>
-            <span>₹${gst.toFixed(2)}</span>
-          </div>
+         
           <div class="total-row grand-total">
             <span>Total Amount:</span>
             <span>₹${total.toFixed(2)}</span>
@@ -879,32 +923,35 @@ const AdminPage = () => {
                       onChange={handleNewProductChange}
                     >
                       <option value="">Select Gender</option>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
+                      <option value="Boys">Boys</option>
+                      <option value="Girls">Girls</option>
                       <option value="unisex">Unisex</option>
                     </select>
                   </div>
                 </div>
 
-
+                
+                {/* Product Image */}
                 <div className="form-group">
-                  <label htmlFor="product_image">Product Image (Optional, max 2MB)</label>
+                  <label htmlFor="product_image">Product Images (Optional, up to 5 files, max 2MB each)</label>
                   <input
                     type="file"
                     id="product_image"
                     accept="image/*"
-                    style={{ display: 'none' }} // Hide the file input
+                    multiple
                     onChange={handleNewProductImageChange}
                   />
-                  <button
-                    type="button"
-                    className="upload-btn"
-                    onClick={() => document.getElementById('product_image').click()}
-                  >
-                    Upload Image
-                  </button>
-                  {newProductImage && (
-                    <p className="file-info">✓ Selected: {newProductImage.name}</p>
+                  {newProductImages.length > 0 && (
+                    <div className="file-info">
+                      <p>✓ Selected {newProductImages.length} image{newProductImages.length > 1 ? 's' : ''}:</p>
+                      <ul>
+                        {newProductImages.map((file, index) => (
+                          <li key={`${file.name}-${index}`}>
+                            {file.name} ({(file.size / 1024).toFixed(0)} KB)
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
                 </div>
 
@@ -980,7 +1027,7 @@ const AdminPage = () => {
 
 
             <div className="form-group">
-              <label htmlFor="file-input" className="upload-button">
+              <label htmlFor="file-input" >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   className="upload-icon"
@@ -995,21 +1042,31 @@ const AdminPage = () => {
                   <polyline points="7 9 12 4 17 9" />
                   <line x1="12" y1="4" x2="12" y2="16" />
                 </svg>
-                Upload Image
+                Upload Images
               </label>
 
               <input
                 type="file"
                 id="file-input"
                 accept="image/*"
+                multiple
                 onChange={handleFileChange}
                 required
-                style={{ display: 'none' }}
+              
               />
 
-              {selectedFile && (
-                <p className="file-info">✓ Selected: {selectedFile.name}</p>
-              )}
+              {selectedFiles.length > 0 && (
+                    <div className="file-info">
+                      <p>✓ Selected {selectedFiles.length} image{selectedFiles.length > 1 ? 's' : ''}:</p>
+                      <ul>
+                        {selectedFiles.map((file, index) => (
+                          <li key={`${file.name}-${index}`}>
+                            {file.name} ({(file.size / 1024).toFixed(0)} KB)
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
             </div>
 
 
@@ -1239,10 +1296,10 @@ const AdminPage = () => {
                             <span>Subtotal:</span>
                             <span>₹{calculateBillTotal().subtotal.toFixed(2)}</span>
                           </div>
-                          <div className="summary-row">
+                          {/* <div className="summary-row">
                             <span>GST (18%):</span>
                             <span>₹{calculateBillTotal().gst.toFixed(2)}</span>
-                          </div>
+                          </div> */}
                           <div className="summary-row total">
                             <span>Total Amount:</span>
                             <span>₹{calculateBillTotal().total.toFixed(2)}</span>

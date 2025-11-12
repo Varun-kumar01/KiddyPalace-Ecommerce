@@ -522,7 +522,7 @@ const PaymentPage = () => {
                         <span className="item-name">{item.name}</span>
                         <span className="item-quantity">Qty: {item.quantity}</span>
                       </div>
-                      <span className="item-price">₹{(item.price * item.quantity).toFixed(2)}</span>
+                      <span className="item-price">₹{(Number(item.price) * (Number(item.quantity) || 1)).toFixed(2)}</span>
                     </div>
                   ))}
                 </div>
@@ -530,15 +530,15 @@ const PaymentPage = () => {
                 <div className="price-breakdown">
                   <div className="price-row">
                     <span>Subtotal</span>
-                    <span>₹{orderData.subtotal.toFixed(2)}</span>
+                    <span>₹{Number(orderData.subtotal).toFixed(2)}</span>
                   </div>
-                  <div className="price-row">
+                  {/* <div className="price-row">
                     <span>GST (18%)</span>
                     <span>₹{orderData.gst.toFixed(2)}</span>
-                  </div>
+                  </div> */}
                   <div className="price-row total">
                     <span>Total Amount</span>
-                    <span>₹{orderData.total.toFixed(2)}</span>
+                    <span>₹{Number(orderData.total).toFixed(2)}</span>
                   </div>
                 </div>
 
@@ -556,7 +556,7 @@ const PaymentPage = () => {
                   onClick={handlePayment}
                   disabled={loading || !paymentMethod}
                 >
-                  {loading ? '⏳ Processing...' : `Pay ₹${orderData.total.toFixed(2)}`}
+                  {loading ? '⏳ Processing...' : `Pay ₹${Number(orderData.total).toFixed(2)}`}
                 </button>
 
                 <div className="secure-payment">
