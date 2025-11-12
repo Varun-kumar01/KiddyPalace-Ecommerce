@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 
 const CartContext = createContext();
 
@@ -11,64 +11,89 @@ export const useCart = () => {
 };
 
 export const CartProvider = ({ children }) => {
-  // Initialize cart synchronously from localStorage to avoid a flash/overwrite
-  const getInitialCart = () => {
+  const [cartItems, setCartItems] = useState([]);
+  const [currentUserId, setCurrentUserId] = useState(null);
+  const prevUserIdRef = useRef(null);
+
+  const getUserIdFromLocalStorage = () => {
     try {
-      const saved = localStorage.getItem('cart');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch (err) {
-      console.error('Error reading cart from localStorage during init:', err);
-      try {
-        localStorage.removeItem('cart');
-      } catch (e) {}
+      const raw = localStorage.getItem('user');
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      // Prefer stable id field; fallback to email
+      return parsed?.id ?? parsed?.userId ?? parsed?.email ?? null;
+    } catch {
+      return null;
     }
-    return [];
   };
 
-  const [cartItems, setCartItems] = useState(getInitialCart);
+  const getCartStorageKey = (userId) => {
+    return userId ? `cart:${String(userId)}` : 'cart:guest';
+  };
 
-  // Save cart to localStorage whenever it changes
+  // Determine current user at startup
+  useEffect(() => {
+    const userId = getUserIdFromLocalStorage();
+    setCurrentUserId(userId);
+  }, []);
+
+  // Respond to user changes (custom event + storage event)
+  useEffect(() => {
+    const onUserChanged = () => {
+      const userId = getUserIdFromLocalStorage();
+      setCurrentUserId(userId);
+    };
+    window.addEventListener('user-changed', onUserChanged);
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'user') onUserChanged();
+    });
+    return () => {
+      window.removeEventListener('user-changed', onUserChanged);
+    };
+  }, []);
+
+  // Load cart when user changes
+  useEffect(() => {
+    if (prevUserIdRef.current === currentUserId) return;
+    prevUserIdRef.current = currentUserId;
+    try {
+      const key = getCartStorageKey(currentUserId);
+      const savedCart = localStorage.getItem(key);
+      if (savedCart) {
+        const parsedCart = JSON.parse(savedCart);
+        setCartItems(Array.isArray(parsedCart) ? parsedCart : []);
+      } else {
+        setCartItems([]);
+      }
+    } catch (error) {
+      console.error('Error loading cart from localStorage:', error);
+    }
+  }, [currentUserId]);
+
+  // Save cart to localStorage whenever it changes for the current user key
   useEffect(() => {
     try {
-      localStorage.setItem('cart', JSON.stringify(cartItems));
+      const key = getCartStorageKey(currentUserId);
+      localStorage.setItem(key, JSON.stringify(cartItems));
     } catch (error) {
       console.error('Error saving cart to localStorage:', error);
     }
-  }, [cartItems]);
-
-  // Helper to normalize product shape so stored items are consistent and serializable
-  const normalizeProduct = (p) => {
-    const id = p.id ?? p.sno ?? p.product_id ?? '${Date.now()}-${Math.random()}';
-    return {
-      id,
-      name: p.name ?? p.product_name ?? '',
-      price: Number(p.price ?? p.mrp ?? 0) || 0,
-      image: p.image ?? (Array.isArray(p.images) ? p.images[0] : '') ?? '',
-      stock_quantity: p.stock_quantity ?? p.stock_qty ?? p.stock ?? 999,
-      description: p.description ?? '',
-      // keep any other useful fields
-      ...p,
-    };
-  };
+  }, [cartItems, currentUserId]);
 
   const addToCart = (product, quantity = 1) => {
-    const prod = normalizeProduct(product);
     setCartItems((prevItems) => {
-      const existingItem = prevItems.find((item) => item.id === prod.id);
-
+      const existingItem = prevItems.find((item) => item.id === product.id);
+      
       if (existingItem) {
         // Update quantity if item already in cart
         return prevItems.map((item) =>
-          item.id === prod.id
-            ? { ...item, quantity: (Number(item.quantity) || 0) + Number(quantity) }
+          item.id === product.id
+            ? { ...item, quantity: item.quantity + quantity }
             : item
         );
       } else {
         // Add new item to cart
-        return [...prevItems, { ...prod, quantity: Number(quantity) }];
+        return [...prevItems, { ...product, quantity }];
       }
     });
   };
@@ -92,7 +117,12 @@ export const CartProvider = ({ children }) => {
 
   const clearCart = () => {
     setCartItems([]);
-    localStorage.removeItem('cart');
+    try {
+      const key = getCartStorageKey(currentUserId);
+      localStorage.removeItem(key);
+    } catch (e) {
+      // no-op
+    }
   };
 
   const getCartTotal = () => {
