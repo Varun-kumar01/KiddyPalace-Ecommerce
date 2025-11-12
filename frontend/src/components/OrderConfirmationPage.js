@@ -110,7 +110,7 @@ const OrderConfirmationPage = () => {
               <div className="info-card">
                 <div className="info-icon">💳</div>
                 <h3>Order Total</h3>
-                <p className="highlight price">₹{orderData.total.toFixed(2)}</p>
+                <p className="highlight price">₹{(Number(orderData.total)).toFixed(2)}</p>
                 <p className="sub-text">Including all taxes</p>
               </div>
             </div>
@@ -135,10 +135,10 @@ const OrderConfirmationPage = () => {
                   <div key={index} className="order-item">
                     <div className="item-info">
                       <h4>{item.name}</h4>
-                      <p>Quantity: {item.quantity}</p>
+                      <p>Quantity: {Number(item.quantity) || 1}</p>
                     </div>
                     <div className="item-price">
-                      ₹{(item.price * item.quantity).toFixed(2)}
+                      ₹{(Number(item.price) * Number(item.quantity || 1)).toFixed(2)}
                     </div>
                   </div>
                 ))}
@@ -147,15 +147,15 @@ const OrderConfirmationPage = () => {
               <div className="order-summary">
                 <div className="summary-row">
                   <span>Subtotal</span>
-                  <span>₹{orderData.subtotal.toFixed(2)}</span>
+                  <span>₹{(Number(orderData.subtotal)).toFixed(2)}</span>
                 </div>
-                <div className="summary-row">
+                {/* <div className="summary-row">
                   <span>GST (18%)</span>
                   <span>₹{orderData.gst.toFixed(2)}</span>
-                </div>
+                </div> */}
                 <div className="summary-row total">
                   <span>Total Amount</span>
-                  <span>₹{orderData.total.toFixed(2)}</span>
+                  <span>₹{(Number(orderData.total)).toFixed(2)}</span>
                 </div>
               </div>
             </div>

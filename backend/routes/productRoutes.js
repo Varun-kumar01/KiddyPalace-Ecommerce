@@ -10,14 +10,16 @@ const { authenticateAdmin } = require('../middleware/adminAuth');
 // 🖼️ IMAGE UPLOAD CONFIGURATION
 // =====================================================
 const imageStorage = multer.memoryStorage();
-
-const uploadImage = multer({
+const uploadImage = multer({ 
   storage: imageStorage,
-  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB max image size
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit for images
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) cb(null, true);
-    else cb(new Error('Only image files are allowed!'), false);
-  },
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
 });
 
 // =====================================================
@@ -59,11 +61,11 @@ router.get('/products', productController.getAllProducts);
 // Get single product
 router.get('/products/:id', productController.getProductById);
 
-// Add new product (with image)
-router.post('/products', uploadImage.single('image'), productController.addProduct);
+// Add new product with one or more images (accept any image field name)
+router.post('/products', uploadImage.any(), productController.addProduct);
 
-// Update product image
-router.put('/products/:id/image', uploadImage.single('image'), productController.updateProductImage);
+// Update product images
+router.put('/products/:id/image', uploadImage.any(), productController.updateProductImage);
 
 // Update product stock
 router.put('/products/:id/stock', productController.updateProductStock);

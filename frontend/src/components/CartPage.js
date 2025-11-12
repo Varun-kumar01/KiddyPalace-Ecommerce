@@ -140,16 +140,16 @@ const CartPage = () => {
                 <span className="free">FREE</span>
               </div>
 
-              <div className="summary-row">
+              {/* <div className="summary-row">
                 <span>Tax (GST 18%):</span>
                 <span>₹{(getCartTotal() * 0.18).toFixed(2)}</span>
-              </div>
+              </div> */}
 
               <div className="summary-divider"></div>
 
               <div className="summary-row total">
                 <span>Total:</span>
-                <span>₹{(getCartTotal() * 1.18).toFixed(2)}</span>
+                <span>₹{getCartTotal().toFixed(2)}</span>
               </div>
 
               <button className="checkout-btn" onClick={handleCheckout}>

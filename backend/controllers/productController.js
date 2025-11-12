@@ -3,25 +3,65 @@ const xlsx = require("xlsx");
 const fs = require("fs");
 
 // Helper function to convert image BLOB to base64
-const convertImageToBase64 = (image, imageType) => {
+const convertStoredImageToBase64 = (image, imageType) => {
   if (!image) return null;
   try {
     if (Buffer.isBuffer(image)) {
       return `data:${imageType || 'image/jpeg'};base64,${image.toString('base64')}`;
     }
-    if (image.type === 'Buffer' && Array.isArray(image.data)) {
+    if (image?.type === 'Buffer' && Array.isArray(image.data)) {
       const buffer = Buffer.from(image.data);
       return `data:${imageType || 'image/jpeg'};base64,${buffer.toString('base64')}`;
     }
     if (typeof image === 'string') {
-      return image.startsWith('data:') ? image : `data:${imageType || 'image/jpeg'};base64,${image}`;
+      return image.startsWith('data:')
+        ? image
+        : `data:${imageType || 'image/jpeg'};base64,${image}`;
     }
-    return null;
   } catch (err) {
     console.error('Error converting image to base64:', err);
-    return null;
   }
+  return null;
 };
+
+const buildAdditionalImagesMap = (rows = []) => {
+  return rows.reduce((acc, row) => {
+    const dataUri = convertStoredImageToBase64(row.image, row.image_type);
+    if (!dataUri) return acc;
+    if (!acc[row.product_id]) acc[row.product_id] = [];
+    acc[row.product_id].push(dataUri);
+    return acc;
+  }, {});
+};
+
+const attachImagesToProducts = async (products = []) => {
+  if (!Array.isArray(products) || products.length === 0) return [];
+
+  const productIds = products.map(p => p.id);
+  let additionalImagesMap = {};
+
+  if (productIds.length > 0) {
+    const [rows] = await db.query(
+      `SELECT product_id, image, image_type 
+       FROM product_images 
+       WHERE product_id IN (?) 
+       ORDER BY sort_order ASC, id ASC`,
+      [productIds]
+    );
+    additionalImagesMap = buildAdditionalImagesMap(rows);
+  }
+
+  return products.map(product => {
+    const primaryImage = convertStoredImageToBase64(product.image, product.image_type);
+    const additionalImages = additionalImagesMap[product.id] || [];
+    const imageGallery = primaryImage ? [primaryImage, ...additionalImages] : additionalImages;
+    return { ...product, image: primaryImage, additionalImages, imageGallery };
+  });
+};
+
+
+
+
 
 // Get all products
 exports.getAllProducts = async (req, res) => {
@@ -35,10 +75,7 @@ exports.getAllProducts = async (req, res) => {
     const [products] = await db.query(query);
     
     // Convert BLOB to base64 for each product
-    const productsWithImages = products.map(product => ({
-      ...product,
-      image: convertImageToBase64(product.image, product.image_type)
-    }));
+    const productsWithImages = await attachImagesToProducts(products);
     
     res.status(200).json({
       success: true,
@@ -60,14 +97,11 @@ exports.getProductById = async (req, res) => {
       return res.status(404).json({ message: 'Product not found' });
     }
     
-    const product = {
-      ...products[0],
-      image: convertImageToBase64(products[0].image, products[0].image_type)
-    };
+    const [productWithImages] = await attachImagesToProducts([products[0]]);
     
     res.status(200).json({
       success: true,
-      product: product
+      product: productWithImages
     });
   } catch (error) {
     console.error('Get product error:', error);
@@ -96,8 +130,21 @@ exports.addProduct = async (req, res) => {
 
     } = req.body;
 
-    const image = req.file ? req.file.buffer : null;
-    const image_type = req.file ? req.file.mimetype : null;
+    let uploadedImages = [];
+    if (Array.isArray(req.files)) {
+      uploadedImages = req.files.filter(
+        file => file?.fieldname === 'image' || file?.fieldname === 'images'
+      );
+    } else if (req.files) {
+      if (Array.isArray(req.files.image)) uploadedImages = uploadedImages.concat(req.files.image);
+      if (Array.isArray(req.files.images)) uploadedImages = uploadedImages.concat(req.files.images);
+    }
+    if (uploadedImages.length === 0 && req.file) uploadedImages = [req.file];
+    if (uploadedImages.length > 5) uploadedImages = uploadedImages.slice(0, 5);
+
+    const primaryImageFile = uploadedImages[0];
+    const image = primaryImageFile ? primaryImageFile.buffer : null;
+    const image_type = primaryImageFile ? primaryImageFile.mimetype : null;
 
     if (!name || !price) {
       return res.status(400).json({ error: 'Name and price are required' });
@@ -127,6 +174,19 @@ exports.addProduct = async (req, res) => {
       ]
     );
 
+    const additionalImages = uploadedImages.slice(1);
+    if (additionalImages.length > 0) {
+      // await ensureProductImagesTable();
+      await Promise.all(
+        additionalImages.map((file, index) =>
+          db.query(
+            `INSERT INTO product_images (product_id, image, image_type, sort_order) VALUES (?, ?, ?, ?)`,
+            [result.insertId, file.buffer, file.mimetype, index]
+          )
+        )
+      );
+    }
+
     res.status(201).json({
       success: true,
       message: 'Product added successfully',
@@ -144,29 +204,75 @@ exports.addProduct = async (req, res) => {
 exports.updateProductImage = async (req, res) => {
   try {
     const { id } = req.params;
-    
-    if (!req.file) {
-      return res.status(400).json({ message: 'No image file provided' });
+
+    let uploadedImages = [];
+    if (Array.isArray(req.files)) {
+      uploadedImages = req.files.filter(
+        file => file?.fieldname === 'image' || file?.fieldname === 'images'
+      );
+    } else if (req.files) {
+      if (Array.isArray(req.files.image)) uploadedImages = uploadedImages.concat(req.files.image);
+      if (Array.isArray(req.files.images)) uploadedImages = uploadedImages.concat(req.files.images);
+    }
+    if (uploadedImages.length === 0 && req.file) uploadedImages = [req.file];
+    if (uploadedImages.length === 0) {
+      return res.status(400).json({ success: false, message: 'No image file provided' });
     }
 
-    const image = req.file.buffer;
-    const image_type = req.file.mimetype;
+    const primaryIndexRaw = Array.isArray(req.body?.primaryImageIndex)
+      ? req.body.primaryImageIndex[0]
+      : req.body?.primaryImageIndex;
+    let primaryIndex = parseInt(primaryIndexRaw, 10);
+    if (Number.isNaN(primaryIndex) || primaryIndex < 0 || primaryIndex >= uploadedImages.length) {
+      const explicitPrimaryIdx = uploadedImages.findIndex(f => f.fieldname === 'image');
+      primaryIndex = explicitPrimaryIdx !== -1 ? explicitPrimaryIdx : 0;
+    }
 
-    await db.query(
-      'UPDATE products SET image = ?, image_type = ? WHERE id = ?',
-      [image, image_type, id]
-    );
+    const primaryFile = uploadedImages[primaryIndex];
+    const additionalImages = uploadedImages.filter((_, i) => i !== primaryIndex);
+
+    await db.query('UPDATE products SET image = ?, image_type = ? WHERE id = ?', [
+      primaryFile.buffer,
+      primaryFile.mimetype,
+      id,
+    ]);
+
+    let insertedCount = 0;
+    if (additionalImages.length > 0) {
+      // await ensureProductImagesTable();
+
+      const [[{ maxOrder = -1 } = {}]] = await db.query(
+        'SELECT COALESCE(MAX(sort_order), -1) AS maxOrder FROM product_images WHERE product_id = ?',
+        [id]
+      );
+      const baseOrder = Number.isFinite(Number(maxOrder)) ? Number(maxOrder) : -1;
+
+      await Promise.all(
+        additionalImages.map((file, index) =>
+          db.query(
+            `INSERT INTO product_images (product_id, image, image_type, sort_order) VALUES (?, ?, ?, ?)`,
+            [id, file.buffer, file.mimetype, baseOrder + 1 + index]
+          )
+        )
+      );
+      insertedCount = additionalImages.length;
+    }
 
     res.status(200).json({
       success: true,
-      message: 'Product image updated successfully'
+      message:
+        insertedCount > 0
+          ? `Product image updated. Added ${insertedCount} additional image${insertedCount > 1 ? 's' : ''}.`
+          : 'Product image updated successfully.',
+      primaryUpdated: true,
+      additionalInserted: insertedCount,
     });
-
   } catch (error) {
     console.error('Update image error:', error);
     res.status(500).json({ message: 'Server error while updating image' });
   }
 };
+
 
 // Create order with complete checkout flow
 exports.createOrder = async (req, res) => {
@@ -211,24 +317,33 @@ exports.createOrder = async (req, res) => {
     const orderNumber = 'ORD' + Date.now() + Math.floor(Math.random() * 1000);
 
     // Calculate amounts
-    const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const gstAmount = subtotal * 0.18;
-    const total = subtotal + gstAmount;
+   // ✅ Calculate safe subtotal and total
+const subtotal = Array.isArray(items)
+  ? items.reduce((sum, item) => {
+      const price = Number(item.price) || 0;
+      const qty = Number(item.quantity) || 1;
+      return sum + price * qty;
+    }, 0)
+  : 0;
+
+const safeSubtotal = isNaN(subtotal) ? 0 : Number(subtotal.toFixed(2));
+const safeTotal = isNaN(safeSubtotal) ? 0 : safeSubtotal;
+
 
     // Insert order
     const [orderResult] = await connection.query(
       `INSERT INTO orders_new (
-        user_id, order_number, total_amount, subtotal, gst_amount,
+        user_id, order_number, total_amount, subtotal,
         shipping_full_name, shipping_email, shipping_phone, shipping_address,
         shipping_city, shipping_state, shipping_zip_code, shipping_country,
         payment_method, payment_status, payment_details, order_status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         userId || null,
         orderNumber,
-        total,
-        subtotal,
-        gstAmount,
+        safeTotal,
+        safeSubtotal,
+        // gstAmount,
         shippingAddress.fullName,
         shippingAddress.email,
         shippingAddress.phone,
@@ -249,11 +364,15 @@ exports.createOrder = async (req, res) => {
     // Insert order items and update stock
     for (const item of items) {
       // Insert order item
-      await connection.query(
-        `INSERT INTO order_items (order_id, product_id, product_name, product_price, quantity, item_total)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [orderId, item.id, item.name, item.price, item.quantity, item.price * item.quantity]
-      );
+      const price = Number(item.price) || 0;
+const qty = Number(item.quantity) || 1; // default to 1 if missing
+const total = price * qty;
+
+await connection.query(
+  `INSERT INTO order_items (order_id, product_id, product_name, product_price, quantity, item_total)
+   VALUES (?, ?, ?, ?, ?, ?)`,
+  [orderId, item.id, item.name, price, qty, total]
+);
 
       // Update stock
       await connection.query(
@@ -838,10 +957,8 @@ exports.getProductsBySubcategory = async (req, res) => {
     );
     
     // Convert BLOB to base64 for each product
-    const productsWithImages = products.map(product => ({
-      ...product,
-      image: convertImageToBase64(product.image, product.image_type)
-    }));
+    const productsWithImages = await attachImagesToProducts(products);
+
     
     res.status(200).json({
       success: true,
